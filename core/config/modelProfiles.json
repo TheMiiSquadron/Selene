@@ -1,0 +1,32 @@
+{
+  "_comment": "Logical LM Studio model roles for Selene Core. Runtime fallback still preserves LM_STUDIO_MODEL compatibility.",
+  "roles": {
+    "fast": {
+      "model": "google/gemma-4-26b-a4b",
+      "apiId": "selene-gemma4-26b-a4b",
+      "residency": {
+        "modelKey": "google/gemma-4-26b-a4b",
+        "apiId": "selene-gemma4-26b-a4b",
+        "gpu": "max",
+        "contextLength": 16384
+      },
+      "settings": {}
+    },
+    "primary": {
+      "model": "meta/muse-glimmer",
+      "apiId": "selene-muse-glimmer-30b",
+      "residency": {
+        "modelKey": "meta/muse-glimmer",
+        "apiId": "selene-muse-glimmer-30b",
+        "gpu": "max",
+        "contextLength": 16384
+      },
+      "settings": {}
+    },
+    "specialized": {
+      "model": "",
+      "fallbackToDefault": true,
+      "settings": {}
+    }
+  }
+}

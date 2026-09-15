@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  >
+
+  <meta name="theme-color" content="#0b0d12">
+
+  <meta
+    name="description"
+    content="Selene Companion — a responsive interface for Selene."
+  >
+
+  <title>Selene Companion</title>
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="css/style.css">
+
+  <link
+    rel="icon"
+    type="image/png"
+    href="assets/pebble/favicon.png"
+  >
+
+  <link
+    rel="apple-touch-icon"
+    href="assets/pebble/apple-touch-icon.png"
+  >
+</head>
+
+<body>
+
+  <div id="app" class="app-shell">
+
+    <!-- =========================
+         DESKTOP SIDEBAR
+    ========================== -->
+
+    <aside class="sidebar" aria-label="Primary navigation">
+
+      <div class="sidebar-brand">
+
+        <div class="sidebar-pebble" aria-hidden="true">
+          <div class="pebble pebble-small" data-state="idle"></div>
+        </div>
+
+        <div class="sidebar-brand-text">
+          <span class="brand-name">Selene</span>
+          <span class="brand-subtitle">Companion</span>
+        </div>
+
+      </div>
+
+      <nav class="sidebar-nav">
+
+        <button
+          class="nav-item active"
+          type="button"
+          data-view="chat"
+          aria-current="page"
+        >
+          <span class="nav-icon" aria-hidden="true">●</span>
+          <span>Chat</span>
+        </button>
+
+        <button
+          class="nav-item"
+          type="button"
+          data-view="inbox"
+        >
+          <span class="nav-icon" aria-hidden="true">◆</span>
+          <span>Inbox</span>
+
+          <span
+            id="inboxBadge"
+            class="nav-badge hidden"
+            aria-label="Unread inbox items"
+          >
+            0
+          </span>
+        </button>
+
+        <button
+          class="nav-item"
+          type="button"
+          data-view="approvals"
+        >
+          <span class="nav-icon" aria-hidden="true">◇</span>
+          <span>Approvals</span>
+
+          <span
+            id="approvalBadge"
+            class="nav-badge hidden"
+            aria-label="Pending approvals"
+          >
+            0
+          </span>
+        </button>
+
+        <button
+          class="nav-item"
+          type="button"
+          data-view="activity"
+        >
+          <span class="nav-icon" aria-hidden="true">↻</span>
+          <span>Activity</span>
+        </button>
+
+      </nav>
+
+      <div class="sidebar-footer">
+
+        <div class="connection-summary">
+          <span
+            id="sidebarConnectionDot"
+            class="status-dot offline"
+            aria-hidden="true"
+          ></span>
+
+          <div>
+            <span id="sidebarConnectionName">NOVA</span>
+            <small id="sidebarConnectionText">Offline</small>
+          </div>
+        </div>
+
+      </div>
+
+    </aside>
+
+
+    <!-- =========================
+         MAIN AREA
+    ========================== -->
+
+    <main class="main">
+
+      <!-- HEADER -->
+
+      <header class="topbar">
+
+        <div class="topbar-title">
+          <h1 id="viewTitle">Selene</h1>
+
+          <span
+            id="mobileConnection"
+            class="mobile-connection"
+          >
+            <span
+              id="mobileConnectionDot"
+              class="status-dot offline"
+              aria-hidden="true"
+            ></span>
+
+            <span id="mobileConnectionText">NOVA</span>
+          </span>
+        </div>
+
+        <div class="topbar-actions">
+
+          <button
+            id="connectionButton"
+            class="icon-button"
+            type="button"
+            aria-label="Connection information"
+            title="Connection information"
+          >
+            <span aria-hidden="true">•••</span>
+          </button>
+
+        </div>
+
+      </header>
+
+
+      <!-- =========================
+           VIEWS
+      ========================== -->
+
+      <div class="view-container">
+
+        <!-- CHAT -->
+
+        <section
+          id="chatView"
+          class="view active"
+          data-view-panel="chat"
+          aria-labelledby="viewTitle"
+        >
+
+          <div class="chat-layout">
+
+            <div class="chat-main">
+
+              <!-- Mobile Selene presence -->
+
+              <div class="mobile-presence">
+
+                <div
+                  id="mobilePebble"
+                  class="pebble pebble-large"
+                  data-state="idle"
+                  aria-label="Selene is idle"
+                  role="img"
+                ></div>
+
+                <div class="presence-text">
+                  <span id="seleneStateLabel">Idle</span>
+                </div>
+
+              </div>
+
+
+              <!-- Messages -->
+
+              <div
+                id="messageList"
+                class="message-list"
+                aria-live="polite"
+                aria-label="Conversation"
+              >
+
+                <div class="welcome-state">
+
+                  <div
+                    class="pebble pebble-welcome"
+                    data-state="idle"
+                    aria-hidden="true"
+                  ></div>
+
+                  <h2>Selene</h2>
+
+                  <p>
+                    Connected when you need me.
+                  </p>
+
+                </div>
+
+              </div>
+
+
+              <!-- Composer -->
+
+              <form
+                id="chatForm"
+                class="chat-composer"
+                autocomplete="off"
+              >
+
+                <label class="sr-only" for="chatInput">
+                  Message Selene
+                </label>
+
+                <textarea
+                  id="chatInput"
+                  name="message"
+                  rows="1"
+                  placeholder="Ask Selene..."
+                  maxlength="8000"
+                ></textarea>
+
+                <button
+                  id="sendButton"
+                  class="send-button"
+                  type="submit"
+                  aria-label="Send message"
+                >
+                  <span aria-hidden="true">↑</span>
+                </button>
+
+              </form>
+
+            </div>
+
+
+            <!-- Desktop context panel -->
+
+            <aside
+              class="context-panel"
+              aria-label="Selene status"
+            >
+
+              <section class="context-card pebble-card">
+
+                <span class="context-label">Selene</span>
+
+                <div
+                  id="desktopPebble"
+                  class="pebble pebble-context"
+                  data-state="idle"
+                  aria-label="Selene is idle"
+                  role="img"
+                ></div>
+
+                <div class="state-info">
+                  <strong id="desktopStateLabel">Idle</strong>
+                  <span id="desktopStateDescription">
+                    Ready when needed.
+                  </span>
+                </div>
+
+              </section>
+
+
+              <section class="context-card">
+
+                <span class="context-label">
+                  Connection
+                </span>
+
+                <div class="connection-detail">
+
+                  <span
+                    id="contextConnectionDot"
+                    class="status-dot offline"
+                    aria-hidden="true"
+                  ></span>
+
+                  <div>
+                    <strong>NOVA</strong>
+                    <span id="contextConnectionText">
+                      Not connected
+                    </span>
+                  </div>
+
+                </div>
+
+              </section>
+
+
+              <section class="context-card">
+
+                <div class="context-card-header">
+
+                  <span class="context-label">
+                    Recent activity
+                  </span>
+
+                  <button
+                    type="button"
+                    class="text-button"
+                    data-view="activity"
+                  >
+                    View all
+                  </button>
+
+                </div>
+
+                <div
+                  id="recentActivity"
+                  class="recent-activity"
+                >
+                  <p class="empty-text">
+                    No recent activity.
+                  </p>
+                </div>
+
+              </section>
+
+            </aside>
+
+          </div>
+
+        </section>
+
+
+        <!-- INBOX -->
+
+        <section
+          id="inboxView"
+          class="view"
+          data-view-panel="inbox"
+          hidden
+        >
+
+          <div class="page-heading">
+            <h2>Inbox</h2>
+            <p>
+              Things Selene wants to bring to your attention.
+            </p>
+          </div>
+
+          <div
+            id="inboxList"
+            class="card-list"
+          >
+            <div class="empty-state">
+              <h3>Nothing waiting</h3>
+              <p>
+                Selene doesn't have anything for you right now.
+              </p>
+            </div>
+          </div>
+
+        </section>
+
+
+        <!-- APPROVALS -->
+
+        <section
+          id="approvalsView"
+          class="view"
+          data-view-panel="approvals"
+          hidden
+        >
+
+          <div class="page-heading">
+            <h2>Approvals</h2>
+            <p>
+              Requests that need your permission before Selene continues.
+            </p>
+          </div>
+
+          <div
+            id="approvalList"
+            class="card-list"
+          >
+            <div class="empty-state">
+              <h3>No approvals needed</h3>
+              <p>
+                Selene isn't waiting on permission.
+              </p>
+            </div>
+          </div>
+
+        </section>
+
+
+        <!-- ACTIVITY -->
+
+        <section
+          id="activityView"
+          class="view"
+          data-view-panel="activity"
+          hidden
+        >
+
+          <div class="page-heading">
+            <h2>Activity</h2>
+            <p>
+              Recent actions and events from Selene.
+            </p>
+          </div>
+
+          <div
+            id="activityList"
+            class="activity-list"
+          >
+            <div class="empty-state">
+              <h3>No activity yet</h3>
+              <p>
+                Recent Selene activity will appear here.
+              </p>
+            </div>
+          </div>
+
+        </section>
+
+      </div>
+
+
+      <!-- =========================
+           MOBILE NAVIGATION
+      ========================== -->
+
+      <nav
+        class="mobile-nav"
+        aria-label="Mobile navigation"
+      >
+
+        <button
+          class="mobile-nav-item active"
+          type="button"
+          data-view="chat"
+          aria-current="page"
+        >
+          <span class="mobile-nav-icon" aria-hidden="true">●</span>
+          <span>Chat</span>
+        </button>
+
+        <button
+          class="mobile-nav-item"
+          type="button"
+          data-view="inbox"
+        >
+          <span class="mobile-nav-icon" aria-hidden="true">◆</span>
+          <span>Inbox</span>
+        </button>
+
+        <button
+          class="mobile-nav-item"
+          type="button"
+          data-view="approvals"
+        >
+          <span class="mobile-nav-icon" aria-hidden="true">◇</span>
+          <span>Ask</span>
+        </button>
+
+        <button
+          class="mobile-nav-item"
+          type="button"
+          data-view="activity"
+        >
+          <span class="mobile-nav-icon" aria-hidden="true">↻</span>
+          <span>Activity</span>
+        </button>
+
+      </nav>
+
+    </main>
+
+  </div>
+
+
+  <!-- =========================
+       CONNECTION DIALOG
+  ========================== -->
+
+  <dialog id="connectionDialog" class="dialog">
+
+    <div class="dialog-header">
+
+      <div>
+        <span class="dialog-eyebrow">Selene Core</span>
+        <h2>Connection</h2>
+      </div>
+
+      <button
+        id="closeConnectionDialog"
+        class="icon-button"
+        type="button"
+        aria-label="Close"
+      >
+        ×
+      </button>
+
+    </div>
+
+    <div class="dialog-content">
+
+      <div class="connection-detail connection-detail-large">
+
+        <span
+          id="dialogConnectionDot"
+          class="status-dot offline"
+          aria-hidden="true"
+        ></span>
+
+        <div>
+          <strong>NOVA</strong>
+          <span id="dialogConnectionText">
+            Not connected
+          </span>
+        </div>
+
+      </div>
+
+      <div class="dialog-actions">
+
+        <button
+          id="retryConnectionButton"
+          class="primary-button"
+          type="button"
+        >
+          Retry connection
+        </button>
+
+      </div>
+
+    </div>
+
+  </dialog>
+
+
+  <!-- =========================
+       SCRIPTS
+  ========================== -->
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/inbox.js"></script>
+  <script src="js/approvals.js"></script>
+  <script src="js/activity.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,49 @@
+# ==========================================
+# Selene Monorepo
+# ==========================================
+
+# Node dependencies
+**/node_modules/
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+
+# Environment files / secrets
+**/.env
+**/.env.*
+!**/.env.example
+
+# Logs
+**/*.log
+**/logs/
+
+# Test / coverage output
+**/coverage/
+**/.nyc_output/
+
+# Build / distribution output
+**/dist/
+**/build/
+**/out/
+**/release/
+**/*.tsbuildinfo
+
+# Operating system files
+**/.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+
+# Apple / Xcode generated and user data
+**/DerivedData/
+**/xcuserdata/
+**/*.xcuserstate
+**/*.xcworkspace/xcuserdata/
+
+# Selene Core runtime / machine-specific state
+core/config/applicationPermissions.json
+core/config/apps.json
+core/config/authority.json
+core/config/memory.json

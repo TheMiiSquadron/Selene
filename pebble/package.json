@@ -1,0 +1,16 @@
+{
+  "name": "selene-pebble",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Selene Pebble desktop overlay using the UseJarvis pebble visual implementation.",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "node scripts/start-electron.cjs",
+    "setup": "node scripts/start-electron.cjs --setup",
+    "test": "node --test src/shared/proactiveNotifications.test.cjs",
+    "check": "node --check src/main.cjs && node --check src/preload.cjs && node --check src/shared/pebbleStates.cjs && node --check src/shared/proactiveNotifications.cjs && node --check src/renderer/pebble.js && node --check src/panel/panel.js && node --check src/setup/setup.js && node --check scripts/start-electron.cjs && npm test"
+  },
+  "devDependencies": {
+    "electron": "43.4.1"
+  }
+}

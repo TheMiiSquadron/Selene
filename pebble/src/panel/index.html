@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Selene Panel</title>
+
+    <link
+      rel="stylesheet"
+      href="./panel.css"
+    >
+  </head>
+
+  <body>
+    <main
+      id="panel"
+      class="panel panel--closed"
+      data-state="idle"
+      aria-label="Selene"
+    >
+      <header class="panel-header">
+        <div class="panel-identity">
+          <span class="panel-name">Selene</span>
+
+          <span class="panel-status">
+            <span
+              class="panel-status-dot"
+              aria-hidden="true"
+            ></span>
+
+            <span id="panel-status-text">
+              Ready
+            </span>
+          </span>
+        </div>
+
+        <button
+          type="button"
+          id="close-panel"
+          class="panel-close"
+          aria-label="Close Selene"
+          title="Close (Esc)"
+        >
+          ×
+        </button>
+      </header>
+
+      <section
+        id="conversation"
+        class="conversation"
+        aria-label="Conversation"
+      >
+        <div
+          id="message-list"
+          class="message-list"
+          aria-live="polite"
+        ></div>
+
+        <div
+          id="response-message"
+          class="response-message"
+          role="status"
+          aria-live="polite"
+        ></div>
+
+        <div
+          id="approval-card"
+          class="approval-card"
+          hidden
+        ></div>
+      </section>
+
+      <div
+        id="state-switcher"
+        class="state-switcher"
+        aria-label="Pebble state preview"
+        hidden
+      ></div>
+
+      <div class="composer">
+        <input
+          id="nova-input"
+          type="text"
+          placeholder="Ask Selene..."
+          autocomplete="off"
+          spellcheck="false"
+          aria-label="Ask Selene"
+        >
+
+        <button
+          type="button"
+          id="send-command"
+          class="composer-send"
+          aria-label="Send"
+          title="Send"
+        >
+          <span aria-hidden="true">↑</span>
+        </button>
+      </div>
+    </main>
+
+    <script src="./panel.js"></script>
+  </body>
+</html>

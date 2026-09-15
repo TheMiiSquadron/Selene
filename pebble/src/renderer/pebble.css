@@ -1,0 +1,145 @@
+/* Visual source of truth:
+   Copied from Jarvis-Pebble-Reference/ui/src/ambient/pebble.css. */
+
+:root {
+  --sans: 'Familjen Grotesk', system-ui, -apple-system, sans-serif;
+  --mono: 'Spline Sans Mono', ui-monospace, monospace;
+
+  --state-core: #DDEBFF; --state-bloom: #F4FAFF; --state-halo: #8AA7D8;
+
+  --bg: #FAFBFC; --raise: #FFFFFF; --panel: #EFF2F5; --rule: #E2E7EC; --rule2: #EDF0F3;
+  --ink: #13161A; --ink2: #535B63; --ink3: #677077;
+  --listen-tx: #C2301F; --speak-tx: #1E5FD8;
+
+  --corner: 14px 3px 14px 14px; --corner-sm: 9px 2px 9px 9px;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+}
+
+html, body, #pebble-root {
+  margin: 0; padding: 0;
+  background: transparent;
+  font-family: var(--sans);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none; -webkit-user-select: none;
+  overflow: hidden; height: 100%;
+}
+
+body.pebble-native-transparent { background: transparent; }
+
+.pebble {
+  position: fixed; top: 0; left: 0; z-index: 100;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  width: 26px; height: 26px;
+  will-change: transform;
+}
+
+.gd {
+  position: absolute; inset: 0;
+  border-radius: 50% 50% 50% 6px;
+  transform: rotate(45deg);
+  overflow: hidden;
+  background: rgba(255,255,255,.16);
+  border: .5px solid rgba(20,30,45,.34);
+  -webkit-backdrop-filter: blur(2px) brightness(1.05) saturate(1.18);
+  backdrop-filter: blur(2px) brightness(1.05) saturate(1.18);
+  box-shadow:
+    inset 1px 1px 1.5px rgba(255,255,255,.95),
+    inset -1px -1px 2px rgba(255,255,255,.4),
+    0 3px 10px -2px rgba(20,30,45,.4);
+  transition: box-shadow 240ms var(--ease);
+}
+
+.gd .in {
+  position: absolute; inset: 0; border-radius: inherit;
+  opacity: 0;
+}
+
+.gd .ring {
+  position: absolute; inset: -2px; border-radius: inherit; opacity: 0;
+  background: conic-gradient(from 0deg, transparent 0 200deg, rgba(255,255,255,.98) 300deg, transparent 360deg);
+  -webkit-mask: radial-gradient(circle, transparent 36%, #000 44%, #000 58%, transparent 66%);
+  mask: radial-gradient(circle, transparent 36%, #000 44%, #000 58%, transparent 66%);
+}
+
+@keyframes pb-spin { to { transform: rotate(360deg); } }
+@keyframes pb-idle { 0%,100%{opacity:.34} 50%{opacity:.6} }
+@keyframes pb-success { 0%{opacity:0;transform:scale(.55)} 30%{opacity:1} 100%{opacity:0;transform:scale(1.18)} }
+@keyframes pb-breathe { 0%,100%{opacity:.45;transform:scale(.92)} 50%{opacity:.82;transform:scale(1.08)} }
+
+.pebble--idle .gd .in {
+  opacity: .42; animation: pb-idle 4s ease-in-out infinite;
+  background: radial-gradient(circle, color-mix(in srgb, var(--state-bloom) 62%, transparent), transparent 68%);
+}
+
+.pebble--working .gd .ring { opacity: 1; animation: pb-spin 1.4s linear infinite; }
+.pebble--working .gd .in {
+  opacity: .34; animation: pb-idle 2.1s ease-in-out infinite;
+  background: radial-gradient(circle, color-mix(in srgb, var(--state-core) 72%, transparent), color-mix(in srgb, var(--state-core) 24%, transparent) 55%, transparent 72%);
+}
+.pebble--working .gd {
+  box-shadow: inset 1px 1px 1.5px rgba(255,255,255,.95), inset -1px -1px 2px rgba(255,255,255,.4),
+              0 4px 14px -3px color-mix(in srgb, var(--state-halo) 50%, transparent), 0 2px 6px rgba(20,30,45,.3);
+}
+
+.pebble--success .gd .in {
+  opacity: 0; animation: pb-success .9s var(--ease) both;
+  background: radial-gradient(circle, color-mix(in srgb, var(--state-core) 95%, transparent), color-mix(in srgb, var(--state-core) 30%, transparent) 55%, transparent 72%);
+}
+.pebble--success .gd {
+  box-shadow: inset 1px 1px 1.5px rgba(255,255,255,.95), inset -1px -1px 2px rgba(255,255,255,.4),
+              0 4px 14px -3px color-mix(in srgb, var(--state-halo) 50%, transparent), 0 2px 6px rgba(20,30,45,.3);
+}
+
+.pebble--asking .gd .in,
+.pebble--error .gd .in,
+.pebble--proactive .gd .in {
+  opacity: 1;
+  background: radial-gradient(circle, color-mix(in srgb, var(--state-core) 92%, transparent), color-mix(in srgb, var(--state-core) 28%, transparent) 55%, transparent 72%);
+}
+
+.pebble--asking .gd .in,
+.pebble--error .gd .in {
+  animation: pb-idle 1.25s ease-in-out infinite;
+}
+
+.pebble--proactive .gd .in {
+  animation: pb-breathe 3.8s ease-in-out infinite;
+}
+
+.pebble--asking .gd,
+.pebble--error .gd {
+  box-shadow: inset 1px 1px 1.5px rgba(255,255,255,.95), inset -1px -1px 2px rgba(255,255,255,.4),
+              0 4px 14px -3px color-mix(in srgb, var(--state-halo) 55%, transparent), 0 2px 6px rgba(20,30,45,.3);
+}
+
+.pebble--proactive .gd {
+  box-shadow: inset 1px 1px 1.5px rgba(255,255,255,.95), inset -1px -1px 2px rgba(255,255,255,.4),
+              0 5px 16px -4px color-mix(in srgb, var(--state-halo) 44%, transparent), 0 2px 6px rgba(20,30,45,.26);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gd .in, .gd .ring { animation: none !important; }
+  .pebble--idle .gd .in, .pebble--success .gd .in, .pebble--asking .gd .in, .pebble--error .gd .in, .pebble--proactive .gd .in { opacity: 1; transform: none; }
+  .pebble--working .gd .ring { opacity: 1; }
+}
+
+#pebble {
+  left: 17px;
+  top: 17px;
+}
+
+#pebble-hit-target {
+  position: fixed;
+  left: 4px;
+  top: 4px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  z-index: 101;
+}
