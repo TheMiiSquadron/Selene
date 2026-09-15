@@ -53,6 +53,11 @@ nonisolated enum CompanionAPIError: Error, Equatable, LocalizedError, Sendable {
     }
 }
 
+nonisolated protocol CompanionAPIProviding: Sendable {
+    func fetchHealth() async throws -> CompanionHealthResponse
+    func sendChat(message: String) async throws -> CompanionChatResponse
+}
+
 actor CompanionAPIClient {
     static let allowedPort = 8787
     static let requestTimeout: TimeInterval = 120
@@ -141,3 +146,5 @@ actor CompanionAPIClient {
         }
     }
 }
+
+extension CompanionAPIClient: CompanionAPIProviding {}
