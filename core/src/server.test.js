@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { createCoreServer } from "./server.js";
+import { createCoreServer, startCoreServer } from "./server.js";
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -15,6 +15,34 @@ function close(server) {
     server.close(() => resolve());
   });
 }
+
+test("Core server remains loopback-only when Companion LAN mode is enabled", async () => {
+  const previous = process.env.SELENE_COMPANION_LAN;
+  process.env.SELENE_COMPANION_LAN = "1";
+  const server = startCoreServer({
+    port: 0,
+    onListening() {},
+  });
+
+  try {
+    await new Promise((resolve, reject) => {
+      server.once("listening", resolve);
+      server.once("error", reject);
+    });
+
+    assert.equal(server.address().address, "127.0.0.1");
+  } finally {
+    if (server.listening) {
+      await close(server);
+    }
+
+    if (typeof previous === "undefined") {
+      delete process.env.SELENE_COMPANION_LAN;
+    } else {
+      process.env.SELENE_COMPANION_LAN = previous;
+    }
+  }
+});
 
 function request({
   port,

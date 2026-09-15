@@ -51,6 +51,26 @@ Setup/status endpoints:
     POST http://127.0.0.1:3030/authority/elevate
     POST http://127.0.0.1:3030/authority/reset
 
+The command server on port `3030` is privileged and remains loopback-only.
+
+## Companion LAN access
+
+The non-privileged Companion API listens on `127.0.0.1:8787` by default. To
+make only this API reachable from trusted devices on the local network, start
+Core with the explicit LAN flag:
+
+    $env:SELENE_COMPANION_LAN = "1"
+    npm start
+
+LAN mode binds Companion to `0.0.0.0:8787`. Clients must connect to the host
+computer's LAN address or hostname, such as `http://NOVA:8787/health`; they
+must not use `0.0.0.0` as the destination.
+
+Companion LAN access is unauthenticated and uses plaintext HTTP. Enable it only
+on a trusted private network, and scope any external Windows Firewall rule to
+TCP port `8787` on the Private profile and trusted local devices. Do not expose
+ports `3030` or `1234`, and do not configure router port forwarding.
+
 Application launch permissions are stored separately from discovered app paths in:
 
     config/applicationPermissions.json

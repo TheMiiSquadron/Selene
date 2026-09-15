@@ -6,6 +6,7 @@ import {
 } from "./companionChat.js";
 
 export const COMPANION_HOST = "127.0.0.1";
+export const COMPANION_LAN_HOST = "0.0.0.0";
 export const COMPANION_PORT = 8787;
 export const COMPANION_MAX_BODY_BYTES = 32 * 1024;
 
@@ -14,6 +15,24 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:8080",
   "http://127.0.0.1:8080",
 ]);
+
+export function resolveCompanionHost(env = process.env) {
+  return env.SELENE_COMPANION_LAN === "1"
+    ? COMPANION_LAN_HOST
+    : COMPANION_HOST;
+}
+
+function companionListeningMessage(host, port) {
+  if (host === COMPANION_LAN_HOST) {
+    return `Selene Companion API listening on port ${port} (LAN mode enabled).`;
+  }
+
+  if (host === COMPANION_HOST) {
+    return `Selene Companion API listening on http://${host}:${port} (loopback only).`;
+  }
+
+  return `Selene Companion API listening on http://${host}:${port} (custom bind).`;
+}
 
 async function getCoreVersion() {
   try {
@@ -213,12 +232,16 @@ export function createCompanionServer({
 }
 
 export function startCompanionServer({
-  host = COMPANION_HOST,
+  host,
   port = COMPANION_PORT,
+  env = process.env,
   onListening = console.log,
   onError = console.error,
 } = {}) {
-  const server = createCompanionServer({ host, port });
+  const bindHost = typeof host === "undefined"
+    ? resolveCompanionHost(env)
+    : host;
+  const server = createCompanionServer({ host: bindHost, port });
 
   return new Promise((resolve) => {
     let settled = false;
@@ -235,22 +258,24 @@ export function startCompanionServer({
     server.once("error", (error) => {
       if (error.code === "EADDRINUSE") {
         onError(
-          `Selene Companion API could not start on http://${host}:${port}: port is already in use.`,
+          `Selene Companion API could not start on http://${bindHost}:${port}: port is already in use.`,
         );
         settle(null);
         return;
       }
 
       onError(
-        `Selene Companion API could not start on http://${host}:${port}: ${error.message}`,
+        `Selene Companion API could not start on http://${bindHost}:${port}: ${error.message}`,
       );
       settle(null);
     });
 
-    server.listen(port, host, () => {
-      onListening(
-        `Selene Companion API listening on http://${host}:${port}`,
-      );
+    server.listen(port, bindHost, () => {
+      const address = server.address();
+      const listeningPort = typeof address === "object" && address
+        ? address.port
+        : port;
+      onListening(companionListeningMessage(bindHost, listeningPort));
       settle(server);
     });
   });

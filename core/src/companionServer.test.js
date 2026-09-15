@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import {
   COMPANION_HOST,
+  COMPANION_LAN_HOST,
+  COMPANION_PORT,
   createCompanionServer,
+  resolveCompanionHost,
   startCompanionServer,
 } from "./companionServer.js";
 import {
@@ -40,6 +43,114 @@ function close(server) {
     server.close(() => resolve());
   });
 }
+
+test("Companion host defaults safely unless LAN mode is exactly enabled", () => {
+  assert.equal(COMPANION_PORT, 8787);
+  assert.equal(resolveCompanionHost({}), COMPANION_HOST);
+  assert.equal(resolveCompanionHost({ SELENE_COMPANION_LAN: "" }), COMPANION_HOST);
+  assert.equal(resolveCompanionHost({ SELENE_COMPANION_LAN: "0" }), COMPANION_HOST);
+  assert.equal(resolveCompanionHost({ SELENE_COMPANION_LAN: "true" }), COMPANION_HOST);
+  assert.equal(resolveCompanionHost({ SELENE_COMPANION_LAN: " 1 " }), COMPANION_HOST);
+  assert.equal(resolveCompanionHost({ SELENE_COMPANION_LAN: "1" }), COMPANION_LAN_HOST);
+});
+
+test("Companion startup defaults to loopback and identifies loopback mode", async () => {
+  const messages = [];
+  const server = await startCompanionServer({
+    port: 0,
+    env: {},
+    onListening(message) {
+      messages.push(message);
+    },
+    onError() {},
+  });
+
+  try {
+    const address = server.address();
+    assert.equal(address.address, COMPANION_HOST);
+    assert.equal(address.port > 0, true);
+    assert.deepEqual(messages, [
+      `Selene Companion API listening on http://${COMPANION_HOST}:${address.port} (loopback only).`,
+    ]);
+  } finally {
+    await close(server);
+  }
+});
+
+test("Companion LAN flag binds all IPv4 interfaces and identifies LAN mode", async () => {
+  const messages = [];
+  const server = await startCompanionServer({
+    port: 0,
+    env: { SELENE_COMPANION_LAN: "1" },
+    onListening(message) {
+      messages.push(message);
+    },
+    onError() {},
+  });
+
+  try {
+    const address = server.address();
+    assert.equal(address.address, COMPANION_LAN_HOST);
+    assert.equal(address.port > 0, true);
+    assert.deepEqual(messages, [
+      `Selene Companion API listening on port ${address.port} (LAN mode enabled).`,
+    ]);
+  } finally {
+    await close(server);
+  }
+});
+
+test("Explicit Companion host overrides the LAN environment flag", async () => {
+  const server = await startCompanionServer({
+    host: COMPANION_HOST,
+    port: 0,
+    env: { SELENE_COMPANION_LAN: "1" },
+    onListening() {},
+    onError() {},
+  });
+
+  try {
+    assert.equal(server.address().address, COMPANION_HOST);
+  } finally {
+    await close(server);
+  }
+});
+
+test("Companion health and chat endpoints work while bound for LAN access", async () => {
+  const server = createTestCompanionServer({ host: COMPANION_LAN_HOST });
+  const port = await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, COMPANION_LAN_HOST, () => resolve(server.address().port));
+  });
+
+  try {
+    const health = await request({ port });
+    const chat = await request({
+      port,
+      method: "POST",
+      path: "/api/chat",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: {
+        message: "Hello over LAN",
+      },
+    });
+
+    assert.equal(server.address().address, COMPANION_LAN_HOST);
+    assert.equal(health.statusCode, 200);
+    assert.equal(JSON.parse(health.body).ok, true);
+    assert.equal(chat.statusCode, 200);
+    assert.deepEqual(JSON.parse(chat.body), {
+      ok: true,
+      reply: TEST_CHAT_REPLY,
+      state: "idle",
+      events: [],
+    });
+  } finally {
+    await close(server);
+  }
+});
 
 function request({
   port,
