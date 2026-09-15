@@ -120,7 +120,7 @@ function readJsonBody(request) {
   });
 }
 
-async function handleChat(request, response) {
+async function handleChat(request, response, chatHandler) {
   if (!isJsonContentType(request)) {
     sendError(
       request,
@@ -147,7 +147,7 @@ async function handleChat(request, response) {
   }
 
   try {
-    const result = await handleCompanionChat({
+    const result = await chatHandler({
       message: payload?.message,
     });
 
@@ -167,6 +167,7 @@ export function createCompanionServer({
   port = COMPANION_PORT,
   machine = "NOVA",
   name = "Selene Core",
+  chatHandler = handleCompanionChat,
 } = {}) {
   const server = http.createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", `http://${host}:${port}`);
@@ -187,7 +188,7 @@ export function createCompanionServer({
     }
 
     if (request.method === "POST" && url.pathname === "/api/chat") {
-      await handleChat(request, response);
+      await handleChat(request, response, chatHandler);
       return;
     }
 

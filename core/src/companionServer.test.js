@@ -6,7 +6,27 @@ import {
   createCompanionServer,
   startCompanionServer,
 } from "./companionServer.js";
-import { COMPANION_CHAT_STATES } from "./companionChat.js";
+import {
+  COMPANION_CHAT_STATES,
+  handleCompanionChat,
+} from "./companionChat.js";
+
+const TEST_CHAT_REPLY = "A conversational reply.";
+
+function createTestCompanionServer(options = {}) {
+  const modelService = {
+    async createChatCompletion() {
+      return {
+        choices: [{ message: { content: TEST_CHAT_REPLY } }],
+      };
+    },
+  };
+
+  return createCompanionServer({
+    ...options,
+    chatHandler: ({ message }) => handleCompanionChat({ message, modelService }),
+  });
+}
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -146,7 +166,7 @@ test("Companion API handles OPTIONS requests for allowed origins", async () => {
 });
 
 test("Companion chat endpoint accepts a valid message", async () => {
-  const server = createCompanionServer();
+  const server = createTestCompanionServer();
   const port = await listen(server);
 
   try {
@@ -166,7 +186,7 @@ test("Companion chat endpoint accepts a valid message", async () => {
     assert.equal(response.statusCode, 200);
     assert.equal(body.ok, true);
     assert.equal(typeof body.reply, "string");
-    assert.equal(body.reply, "I'm here.");
+    assert.equal(body.reply, TEST_CHAT_REPLY);
     assert.equal(COMPANION_CHAT_STATES.has(body.state), true);
     assert.equal(body.state, "idle");
     assert.equal(Array.isArray(body.events), true);
@@ -177,7 +197,18 @@ test("Companion chat endpoint accepts a valid message", async () => {
 });
 
 test("Companion chat remains disconnected from privileged command/model pipeline", async () => {
-  const server = createCompanionServer();
+  const calls = [];
+  const server = createCompanionServer({
+    async chatHandler(input) {
+      calls.push(input);
+      return {
+        ok: true,
+        reply: "I can discuss that, but cannot open applications here.",
+        state: "idle",
+        events: [],
+      };
+    },
+  });
   const port = await listen(server);
 
   try {
@@ -196,9 +227,10 @@ test("Companion chat remains disconnected from privileged command/model pipeline
     const body = JSON.parse(response.body);
 
     assert.equal(response.statusCode, 200);
+    assert.deepEqual(calls, [{ message: "Open Notepad" }]);
     assert.deepEqual(body, {
       ok: true,
-      reply: "I'm here.",
+      reply: "I can discuss that, but cannot open applications here.",
       state: "idle",
       events: [],
     });
@@ -372,7 +404,7 @@ test("Companion chat rejects unsupported methods", async () => {
 });
 
 test("Companion chat CORS allows both local development origins only", async () => {
-  const server = createCompanionServer();
+  const server = createTestCompanionServer();
   const port = await listen(server);
 
   try {
@@ -422,6 +454,42 @@ test("Companion chat CORS allows both local development origins only", async () 
       "http://127.0.0.1:8080",
     );
     assert.equal(unknown.headers["access-control-allow-origin"], undefined);
+  } finally {
+    await close(server);
+  }
+});
+
+test("Companion chat sanitizes model failures", async () => {
+  const server = createCompanionServer({
+    async chatHandler() {
+      throw new Error("private model diagnostic");
+    },
+  });
+  const port = await listen(server);
+
+  try {
+    const response = await request({
+      port,
+      method: "POST",
+      path: "/api/chat",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: {
+        message: "Hello",
+      },
+    });
+    const body = JSON.parse(response.body);
+
+    assert.equal(response.statusCode, 500);
+    assert.deepEqual(body, {
+      ok: false,
+      error: {
+        code: "CHAT_FAILED",
+        message: "Chat request failed.",
+      },
+    });
+    assert.doesNotMatch(response.body, /private model diagnostic/);
   } finally {
     await close(server);
   }
