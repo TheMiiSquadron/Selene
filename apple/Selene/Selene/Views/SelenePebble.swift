@@ -1,11 +1,14 @@
 import SwiftUI
 
-/// Native Apple implementation of Selene's canonical Pebble.
+/// Selene's native Apple Pebble.
 ///
-/// Visual behavior is derived from the desktop Pebble implementation:
-/// - pebble/src/renderer/pebble.css
-/// - pebble/src/shared/pebbleStates.cjs
+/// The Pebble is a translucent glass object containing state-colored light.
+/// Its geometry remains constant across states; only its illumination and
+/// animation change.
 struct SelenePebble: View {
+
+    // MARK: - State
+
     enum State: CaseIterable {
         case idle
         case working
@@ -64,7 +67,8 @@ struct SelenePebble: View {
     let state: State
     var size: CGFloat = 76
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion)
+    private var reduceMotion
 
     @State private var breathing = false
     @State private var ringRotation = 0.0
@@ -74,67 +78,201 @@ struct SelenePebble: View {
         state.palette
     }
 
+    // MARK: - Body
+
     var body: some View {
         ZStack {
-            halo
-
-            pebbleBody
+            externalGlow
+            internalLight
+            glassShell
 
             if state == .working {
-                workingRing
+                workingPerimeterLight
             }
         }
         .frame(width: size, height: size)
         .onAppear {
-            updateAnimation(for: state)
+            startAnimations(for: state)
         }
         .onChange(of: state) { _, newState in
-            updateAnimation(for: newState)
+            startAnimations(for: newState)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Selene")
-        .accessibilityValue(accessibilityState)
+        .accessibilityValue(accessibilityDescription)
     }
 
-    private var halo: some View {
-        Circle()
-            .fill(palette.halo.opacity(haloOpacity))
-            .frame(
-                width: size * haloScale,
-                height: size * haloScale
-            )
-            .blur(radius: size * 0.18)
-            .scaleEffect(breathingScale)
-    }
+    // MARK: - External glow
 
-    private var pebbleBody: some View {
+    /// A restrained bloom escaping from the illuminated glass.
+    private var externalGlow: some View {
         PebbleShape()
-            .fill(.ultraThinMaterial)
+            .fill(palette.halo.opacity(externalGlowOpacity))
+            .frame(
+                width: size * 1.08,
+                height: size * 1.08
+            )
+            .blur(radius: size * 0.13)
+            .scaleEffect(glowScale)
+    }
+
+    // MARK: - Internal state light
+
+    /// The state color exists underneath the glass rather than tinting
+    /// the glass shell itself.
+    private var internalLight: some View {
+        ZStack {
+            PebbleShape()
+                .fill(
+                    LinearGradient(
+                        stops: [
+                            .init(
+                                color: palette.core.opacity(
+                                    internalBaseOpacity * 0.45
+                                ),
+                                location: 0.00
+                            ),
+                            .init(
+                                color: palette.core.opacity(
+                                    internalBaseOpacity
+                                ),
+                                location: 0.48
+                            ),
+                            .init(
+                                color: palette.halo.opacity(
+                                    internalBaseOpacity * 0.82
+                                ),
+                                location: 1.00
+                            )
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            PebbleShape()
+                .fill(
+                    RadialGradient(
+                        stops: [
+                            .init(
+                                color: palette.bloom.opacity(
+                                    internalBloomOpacity
+                                ),
+                                location: 0.00
+                            ),
+                            .init(
+                                color: palette.core.opacity(
+                                    internalBloomOpacity * 0.88
+                                ),
+                                location: 0.28
+                            ),
+                            .init(
+                                color: palette.core.opacity(
+                                    internalBloomOpacity * 0.50
+                                ),
+                                location: 0.58
+                            ),
+                            .init(
+                                color: .clear,
+                                location: 1.00
+                            )
+                        ],
+                        center: UnitPoint(x: 0.62, y: 0.46),
+                        startRadius: 0,
+                        endRadius: size * 0.76
+                    )
+                )
+        }
+        .clipShape(PebbleShape())
+        .scaleEffect(internalLightScale)
+    }
+
+    // MARK: - Glass shell
+
+    /// Neutral translucent surface detail sits above the colored light.
+    /// These layers create reflection and depth without hiding the state.
+    private var glassShell: some View {
+        PebbleShape()
+
+            // Very light neutral glass tint.
+            .fill(
+                LinearGradient(
+                    stops: [
+                        .init(
+                            color: .white.opacity(0.20),
+                            location: 0.00
+                        ),
+                        .init(
+                            color: .white.opacity(0.07),
+                            location: 0.30
+                        ),
+                        .init(
+                            color: .clear,
+                            location: 0.58
+                        ),
+                        .init(
+                            color: .black.opacity(0.12),
+                            location: 1.00
+                        )
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+
+            // Broad reflected light across the upper-left glass.
             .overlay {
                 PebbleShape()
                     .fill(
                         RadialGradient(
-                            colors: [
-                                palette.bloom.opacity(innerBloomOpacity),
-                                palette.core.opacity(innerCoreOpacity),
-                                palette.core.opacity(0.08),
-                                .clear
+                            stops: [
+                                .init(
+                                    color: .white.opacity(0.34),
+                                    location: 0.00
+                                ),
+                                .init(
+                                    color: .white.opacity(0.15),
+                                    location: 0.28
+                                ),
+                                .init(
+                                    color: .white.opacity(0.04),
+                                    location: 0.60
+                                ),
+                                .init(
+                                    color: .clear,
+                                    location: 1.00
+                                )
                             ],
-                            center: .center,
+                            center: UnitPoint(x: 0.24, y: 0.16),
                             startRadius: 0,
-                            endRadius: size * 0.48
+                            endRadius: size * 0.72
                         )
                     )
+                    .blendMode(.screen)
             }
+
+            // Thin diagonal surface sheen.
             .overlay {
                 PebbleShape()
                     .fill(
                         LinearGradient(
-                            colors: [
-                                .white.opacity(0.72),
-                                .white.opacity(0.16),
-                                .clear,
-                                .black.opacity(0.10)
+                            stops: [
+                                .init(
+                                    color: .white.opacity(0.28),
+                                    location: 0.00
+                                ),
+                                .init(
+                                    color: .white.opacity(0.08),
+                                    location: 0.22
+                                ),
+                                .init(
+                                    color: .clear,
+                                    location: 0.46
+                                ),
+                                .init(
+                                    color: .clear,
+                                    location: 1.00
+                                )
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -142,137 +280,221 @@ struct SelenePebble: View {
                     )
                     .blendMode(.screen)
             }
+
+            // Crisp outer glass edge.
             .overlay {
                 PebbleShape()
                     .stroke(
                         LinearGradient(
-                            colors: [
-                                .white.opacity(0.90),
-                                .white.opacity(0.28),
-                                .black.opacity(0.22)
+                            stops: [
+                                .init(
+                                    color: .white.opacity(0.90),
+                                    location: 0.00
+                                ),
+                                .init(
+                                    color: .white.opacity(0.42),
+                                    location: 0.28
+                                ),
+                                .init(
+                                    color: .white.opacity(0.13),
+                                    location: 0.62
+                                ),
+                                .init(
+                                    color: .black.opacity(0.22),
+                                    location: 1.00
+                                )
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
-                        lineWidth: max(0.8, size * 0.012)
+                        lineWidth: max(0.9, size * 0.013)
                     )
             }
+
+            // A faint inner rim gives the glass thickness.
+            .overlay {
+                PebbleShape()
+                    .inset(by: size * 0.035)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                .white.opacity(0.18),
+                                .clear,
+                                .black.opacity(0.12)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: max(0.6, size * 0.008)
+                    )
+            }
+
             .shadow(
-                color: palette.halo.opacity(shadowOpacity),
-                radius: size * 0.16,
-                x: 0,
-                y: size * 0.055
+                color: palette.halo.opacity(edgeGlowOpacity),
+                radius: size * 0.08
             )
+
             .shadow(
-                color: .black.opacity(0.30),
+                color: .black.opacity(0.38),
                 radius: size * 0.08,
                 x: 0,
-                y: size * 0.04
+                y: size * 0.045
             )
+
             .scaleEffect(pebbleScale)
     }
 
-    private var workingRing: some View {
+    // MARK: - Working light
+
+    /// The Pebble never rotates.
+    /// A bright section of the perimeter travels around the stationary glass.
+    private var workingPerimeterLight: some View {
         PebbleShape()
             .stroke(
                 AngularGradient(
-                    colors: [
-                        .clear,
-                        .clear,
-                        .white.opacity(0.08),
-                        .white.opacity(0.95),
-                        palette.bloom.opacity(0.85),
-                        .clear
-                    ],
-                    center: .center
+                    gradient: Gradient(stops: [
+                        .init(
+                            color: .clear,
+                            location: 0.00
+                        ),
+                        .init(
+                            color: .clear,
+                            location: 0.55
+                        ),
+                        .init(
+                            color: palette.core.opacity(0.12),
+                            location: 0.66
+                        ),
+                        .init(
+                            color: palette.core.opacity(0.48),
+                            location: 0.74
+                        ),
+                        .init(
+                            color: palette.bloom.opacity(0.90),
+                            location: 0.80
+                        ),
+                        .init(
+                            color: .white.opacity(0.96),
+                            location: 0.83
+                        ),
+                        .init(
+                            color: palette.bloom.opacity(0.62),
+                            location: 0.87
+                        ),
+                        .init(
+                            color: palette.core.opacity(0.16),
+                            location: 0.93
+                        ),
+                        .init(
+                            color: .clear,
+                            location: 1.00
+                        )
+                    ]),
+                    center: .center,
+                    angle: .degrees(ringRotation)
                 ),
-                lineWidth: max(2, size * 0.045)
+                lineWidth: max(1.4, size * 0.027)
             )
-            .padding(size * 0.08)
-            .rotationEffect(.degrees(ringRotation))
-            .opacity(0.95)
+            .padding(size * 0.025)
+            .shadow(
+                color: palette.bloom.opacity(0.32),
+                radius: size * 0.035
+            )
     }
 
-    private var innerBloomOpacity: Double {
+    // MARK: - State intensity
+
+    private var internalBaseOpacity: Double {
         switch state {
         case .idle:
-            return breathing ? 0.55 : 0.34
+            return breathing ? 0.26 : 0.20
 
         case .working:
-            return breathing ? 0.50 : 0.30
+            return breathing ? 0.74 : 0.58
 
         case .success:
-            return successPulse ? 0.95 : 0.30
+            return successPulse ? 0.78 : 0.58
 
-        case .asking, .error:
-            return breathing ? 0.95 : 0.62
+        case .asking:
+            return breathing ? 0.76 : 0.58
+
+        case .error:
+            return breathing ? 0.80 : 0.62
 
         case .proactive:
-            return breathing ? 0.88 : 0.48
+            return breathing ? 0.76 : 0.56
         }
     }
 
-    private var innerCoreOpacity: Double {
+    private var internalBloomOpacity: Double {
         switch state {
         case .idle:
-            return 0.22
+            return breathing ? 0.30 : 0.22
+
         case .working:
-            return 0.38
+            return breathing ? 0.82 : 0.62
+
         case .success:
-            return successPulse ? 0.70 : 0.24
-        case .asking, .error:
-            return 0.55
+            return successPulse ? 0.88 : 0.62
+
+        case .asking:
+            return breathing ? 0.84 : 0.64
+
+        case .error:
+            return breathing ? 0.86 : 0.66
+
         case .proactive:
-            return 0.50
+            return breathing ? 0.84 : 0.62
         }
     }
 
-    private var haloOpacity: Double {
+    private var externalGlowOpacity: Double {
         switch state {
         case .idle:
-            return 0.14
+            return breathing ? 0.08 : 0.05
+
         case .working:
-            return 0.28
+            return breathing ? 0.20 : 0.12
+
         case .success:
-            return successPulse ? 0.32 : 0.12
-        case .asking, .error:
-            return 0.30
+            return successPulse ? 0.22 : 0.11
+
+        case .asking:
+            return breathing ? 0.20 : 0.12
+
+        case .error:
+            return breathing ? 0.22 : 0.13
+
         case .proactive:
+            return breathing ? 0.20 : 0.12
+        }
+    }
+
+    private var edgeGlowOpacity: Double {
+        switch state {
+        case .idle:
+            return 0.10
+
+        case .working:
             return 0.26
-        }
-    }
 
-    private var haloScale: CGFloat {
-        switch state {
-        case .idle:
-            return 1.15
-        case .working:
-            return 1.28
         case .success:
-            return successPulse ? 1.38 : 1.18
-        case .asking, .error:
-            return 1.30
+            return 0.23
+
+        case .asking:
+            return 0.24
+
+        case .error:
+            return 0.27
+
         case .proactive:
-            return 1.34
+            return 0.25
         }
     }
 
-    private var shadowOpacity: Double {
-        switch state {
-        case .idle:
-            return 0.20
-        case .working:
-            return 0.46
-        case .success:
-            return 0.40
-        case .asking, .error:
-            return 0.48
-        case .proactive:
-            return 0.42
-        }
-    }
+    // MARK: - Scale
 
-    private var breathingScale: CGFloat {
+    private var glowScale: CGFloat {
         guard !reduceMotion else {
             return 1
         }
@@ -280,14 +502,41 @@ struct SelenePebble: View {
         switch state {
         case .idle:
             return breathing ? 1.04 : 0.98
+
         case .working:
-            return breathing ? 1.05 : 0.98
-        case .asking, .error:
-            return breathing ? 1.06 : 0.97
-        case .proactive:
-            return breathing ? 1.08 : 0.92
+            return breathing ? 1.07 : 0.98
+
         case .success:
-            return successPulse ? 1.18 : 0.90
+            return successPulse ? 1.14 : 0.98
+
+        case .asking, .error:
+            return breathing ? 1.07 : 0.97
+
+        case .proactive:
+            return breathing ? 1.09 : 0.96
+        }
+    }
+
+    private var internalLightScale: CGFloat {
+        guard !reduceMotion else {
+            return 1
+        }
+
+        switch state {
+        case .idle:
+            return breathing ? 1.015 : 0.99
+
+        case .working:
+            return breathing ? 1.025 : 0.99
+
+        case .success:
+            return successPulse ? 1.045 : 0.99
+
+        case .asking, .error:
+            return breathing ? 1.025 : 0.99
+
+        case .proactive:
+            return breathing ? 1.035 : 0.985
         }
     }
 
@@ -297,30 +546,15 @@ struct SelenePebble: View {
         }
 
         if state == .success {
-            return successPulse ? 1.08 : 0.96
+            return successPulse ? 1.035 : 0.985
         }
 
         return 1
     }
 
-    private var accessibilityState: String {
-        switch state {
-        case .idle:
-            return "Idle"
-        case .working:
-            return "Working"
-        case .success:
-            return "Done"
-        case .asking:
-            return "Needs your attention"
-        case .error:
-            return "Unable to proceed"
-        case .proactive:
-            return "Has something for you"
-        }
-    }
+    // MARK: - Animation
 
-    private func updateAnimation(for newState: State) {
+    private func startAnimations(for newState: State) {
         breathing = false
         ringRotation = 0
         successPulse = false
@@ -354,7 +588,9 @@ struct SelenePebble: View {
             }
 
         case .success:
-            withAnimation(.easeOut(duration: 0.9)) {
+            withAnimation(
+                .easeOut(duration: 0.9)
+            ) {
                 successPulse = true
             }
 
@@ -375,7 +611,33 @@ struct SelenePebble: View {
             }
         }
     }
+
+    // MARK: - Accessibility
+
+    private var accessibilityDescription: String {
+        switch state {
+        case .idle:
+            return "Idle"
+
+        case .working:
+            return "Working"
+
+        case .success:
+            return "Done"
+
+        case .asking:
+            return "Needs your attention"
+
+        case .error:
+            return "Unable to proceed"
+
+        case .proactive:
+            return "Has something for you"
+        }
+    }
 }
+
+// MARK: - Palette
 
 private struct Palette {
     let core: Color
@@ -383,50 +645,75 @@ private struct Palette {
     let halo: Color
 }
 
-/// SwiftUI approximation of the desktop Pebble's:
-/// `border-radius: 50% 50% 50% 6px; transform: rotate(45deg);`
-private struct PebbleShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        let side = min(rect.width, rect.height)
-        let radius = side * 0.50
-        let smallRadius = side * 0.115
+// MARK: - Pebble geometry
 
-        let baseRect = CGRect(
-            x: rect.midX - side / 2,
-            y: rect.midY - side / 2,
+/// Approximation of the canonical desktop geometry:
+///
+/// border-radius: 50% 50% 50% 6px;
+/// transform: rotate(45deg);
+private struct PebbleShape: InsettableShape {
+    var insetAmount: CGFloat = 0
+
+    func path(in rect: CGRect) -> Path {
+        let insetRect = rect.insetBy(
+            dx: insetAmount,
+            dy: insetAmount
+        )
+
+        let side = min(
+            insetRect.width,
+            insetRect.height
+        )
+
+        let square = CGRect(
+            x: insetRect.midX - side / 2,
+            y: insetRect.midY - side / 2,
             width: side,
             height: side
         )
 
+        let largeRadius = side * 0.50
+        let smallRadius = side * 0.115
+
         var path = Path(
-            roundedRect: baseRect,
+            roundedRect: square,
             cornerRadii: RectangleCornerRadii(
-                topLeading: radius,
+                topLeading: largeRadius,
                 bottomLeading: smallRadius,
-                bottomTrailing: radius,
-                topTrailing: radius
+                bottomTrailing: largeRadius,
+                topTrailing: largeRadius
             )
         )
 
-        let transform = CGAffineTransform(
-            rotationAngle: .pi / 4
-        ).concatenating(
-            CGAffineTransform(
-                translationX: rect.midX,
-                y: rect.midY
-            )
-        ).concatenating(
-            CGAffineTransform(
-                translationX: -rect.midX,
-                y: -rect.midY
-            )
+        let center = CGPoint(
+            x: rect.midX,
+            y: rect.midY
         )
 
-        path = path.applying(transform)
+        var transform = CGAffineTransform.identity
 
-        return path
+        transform = transform
+            .translatedBy(
+                x: center.x,
+                y: center.y
+            )
+            .rotated(by: .pi / 4)
+            .translatedBy(
+                x: -center.x,
+                y: -center.y
+            )
+
+        return path.applying(transform)
+    }
+
+    func inset(by amount: CGFloat) -> PebbleShape {
+        var copy = self
+        copy.insetAmount += amount
+        return copy
     }
 }
+
+// MARK: - Color helper
 
 private extension Color {
     init(hex: UInt32) {
@@ -440,15 +727,32 @@ private extension Color {
     }
 }
 
+// MARK: - Preview
+
 #Preview("Selene Pebble") {
     ZStack {
-        Color.black
-            .ignoresSafeArea()
+        Color(
+            red: 0.025,
+            green: 0.025,
+            blue: 0.035
+        )
+        .ignoresSafeArea()
 
-        VStack(spacing: 32) {
-            SelenePebble(state: .idle)
-            SelenePebble(state: .working)
-            SelenePebble(state: .proactive)
+        VStack(spacing: 28) {
+            SelenePebble(
+                state: .idle,
+                size: 76
+            )
+
+            SelenePebble(
+                state: .working,
+                size: 76
+            )
+
+            SelenePebble(
+                state: .proactive,
+                size: 76
+            )
         }
     }
 }
