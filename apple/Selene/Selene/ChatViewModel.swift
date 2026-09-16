@@ -18,7 +18,9 @@ final class ChatViewModel {
 
         var message: String {
             switch self {
-            case .attention(let message), .connection(let message), .server(let message):
+            case .attention(let message),
+                 .connection(let message),
+                 .server(let message):
                 message
             }
         }
@@ -32,17 +34,43 @@ final class ChatViewModel {
         case error
     }
 
+    struct ConversationMessage: Identifiable, Equatable {
+        enum Role: Equatable {
+            case user
+            case assistant
+        }
+
+        let id: UUID
+        let role: Role
+        let text: String
+
+        init(
+            id: UUID = UUID(),
+            role: Role,
+            text: String
+        ) {
+            self.id = id
+            self.role = role
+            self.text = text
+        }
+    }
+
     let assistantDisplayName: String
+
     var message = ""
+
     private(set) var connectionState = ConnectionState.notConnected
-    private(set) var latestReply: String?
+    private(set) var messages: [ConversationMessage] = []
     private(set) var issue: Issue?
     private(set) var isSending = false
 
     @ObservationIgnored
     private let api: any CompanionAPIProviding
 
-    init(configuration: AppConfiguration, api: any CompanionAPIProviding) {
+    init(
+        configuration: AppConfiguration,
+        api: any CompanionAPIProviding
+    ) {
         assistantDisplayName = configuration.assistantDisplayName
         self.api = api
     }
@@ -56,7 +84,16 @@ final class ChatViewModel {
     }
 
     var canSend: Bool {
-        !isBusy && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !isBusy
+            && !message
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
+    }
+
+    var latestReply: String? {
+        messages
+            .last(where: { $0.role == .assistant })?
+            .text
     }
 
     var statusText: String {
@@ -67,10 +104,13 @@ final class ChatViewModel {
         switch connectionState {
         case .notConnected:
             return "Not Connected"
+
         case .checking:
             return "Checking Connection"
+
         case .connected:
             return "Connected"
+
         case .unavailable:
             return "Connection Unavailable"
         }
@@ -85,12 +125,15 @@ final class ChatViewModel {
             switch issue {
             case .attention:
                 return .attention
+
             case .connection, .server:
                 return .error
             }
         }
 
-        return connectionState == .connected ? .connected : .neutral
+        return connectionState == .connected
+            ? .connected
+            : .neutral
     }
 
     func checkConnection() async {
@@ -115,7 +158,9 @@ final class ChatViewModel {
             return
         }
 
-        let outgoingMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        let outgoingMessage = message
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
         guard !outgoingMessage.isEmpty else {
             issue = .attention("Enter a message first.")
             return
@@ -123,11 +168,30 @@ final class ChatViewModel {
 
         isSending = true
         issue = nil
-        defer { isSending = false }
+
+        defer {
+            isSending = false
+        }
 
         do {
-            let response = try await api.sendChat(message: outgoingMessage)
-            latestReply = response.reply
+            let response = try await api.sendChat(
+                message: outgoingMessage
+            )
+
+            messages.append(
+                ConversationMessage(
+                    role: .user,
+                    text: outgoingMessage
+                )
+            )
+
+            messages.append(
+                ConversationMessage(
+                    role: .assistant,
+                    text: response.reply
+                )
+            )
+
             message = ""
             connectionState = .connected
         } catch {
@@ -137,26 +201,40 @@ final class ChatViewModel {
             switch presentedIssue {
             case .connection:
                 connectionState = .unavailable
+
             case .server:
                 connectionState = .connected
+
             case .attention:
                 break
             }
         }
     }
 
-    private func makeIssue(for error: Error) -> Issue {
+    private func makeIssue(
+        for error: Error
+    ) -> Issue {
         guard let apiError = error as? CompanionAPIError else {
-            return .connection("Unable to reach Companion.")
+            return .connection(
+                "Unable to reach Companion."
+            )
         }
 
         switch apiError {
         case .server(_, let message, _):
             return .server(message)
-        case .httpStatus, .malformedResponse, .invalidResponse:
-            return .server("Companion returned an unexpected response.")
+
+        case .httpStatus,
+             .malformedResponse,
+             .invalidResponse:
+            return .server(
+                "Companion returned an unexpected response."
+            )
+
         case .invalidBaseURL:
-            return .connection("Companion is not configured correctly.")
+            return .connection(
+                "Companion is not configured correctly."
+            )
         }
     }
 }

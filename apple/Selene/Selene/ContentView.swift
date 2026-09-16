@@ -4,6 +4,7 @@ struct ContentView: View {
     @Bindable var viewModel: ChatViewModel
 
     @FocusState private var isMessageFocused: Bool
+    @State private var showSuccess = false
 
     var body: some View {
         ZStack {
@@ -11,13 +12,30 @@ struct ContentView: View {
 
             VStack(spacing: 0) {
                 identity
-
                 conversation
-
                 composer
             }
         }
         .preferredColorScheme(.dark)
+        .onChange(of: viewModel.isSending) { wasSending, isSending in
+            guard wasSending && !isSending else {
+                return
+            }
+
+            guard viewModel.issue == nil else {
+                return
+            }
+
+            showSuccess = true
+
+            Task {
+                try? await Task.sleep(for: .seconds(1.2))
+
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    showSuccess = false
+                }
+            }
+        }
     }
 
     // MARK: - Background
@@ -57,25 +75,42 @@ struct ContentView: View {
     // MARK: - Conversation
 
     private var conversation: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                if let issue = viewModel.issue {
-                    issueView(issue)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 18) {
+                    if viewModel.messages.isEmpty {
+                        emptyConversation
+                    } else {
+                        ForEach(viewModel.messages) { message in
+                            conversationMessage(message)
+                                .id(message.id)
+                        }
+                    }
+
+                    if let issue = viewModel.issue {
+                        issueView(issue)
+                            .id("issue")
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onChange(of: viewModel.messages.count) {
+                guard let lastMessage = viewModel.messages.last else {
+                    return
                 }
 
-                if let reply = viewModel.latestReply {
-                    assistantMessage(reply)
-                } else {
-                    emptyConversation
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo(
+                        lastMessage.id,
+                        anchor: .bottom
+                    )
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 22)
-            .padding(.top, 8)
-            .padding(.bottom, 24)
         }
-        .scrollDismissesKeyboard(.interactively)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var emptyConversation: some View {
@@ -89,15 +124,68 @@ struct ContentView: View {
             .padding(.top, 26)
     }
 
-    private func assistantMessage(_ message: String) -> some View {
-        Text(message)
-            .font(.system(size: 16))
-            .foregroundStyle(.white.opacity(0.92))
-            .textSelection(.enabled)
-            .frame(
-                maxWidth: .infinity,
-                alignment: .leading
-            )
+    @ViewBuilder
+    private func conversationMessage(
+        _ message: ChatViewModel.ConversationMessage
+    ) -> some View {
+        switch message.role {
+        case .user:
+            userMessage(message.text)
+
+        case .assistant:
+            assistantMessage(message.text)
+        }
+    }
+
+    private func userMessage(
+        _ message: String
+    ) -> some View {
+        HStack {
+            Spacer(minLength: 54)
+
+            Text(message)
+                .font(.system(size: 16))
+                .foregroundStyle(.white.opacity(0.94))
+                .textSelection(.enabled)
+                .padding(.horizontal, 15)
+                .padding(.vertical, 11)
+                .background {
+                    RoundedRectangle(
+                        cornerRadius: 18,
+                        style: .continuous
+                    )
+                    .fill(Color.white.opacity(0.09))
+                }
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: 18,
+                        style: .continuous
+                    )
+                    .stroke(
+                        Color.white.opacity(0.08),
+                        lineWidth: 1
+                    )
+                }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func assistantMessage(
+        _ message: String
+    ) -> some View {
+        HStack {
+            Text(message)
+                .font(.system(size: 16))
+                .foregroundStyle(.white.opacity(0.92))
+                .textSelection(.enabled)
+                .fixedSize(
+                    horizontal: false,
+                    vertical: true
+                )
+
+            Spacer(minLength: 44)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Composer
@@ -181,7 +269,9 @@ struct ContentView: View {
 
     // MARK: - Issues
 
-    private func issueView(_ issue: ChatViewModel.Issue) -> some View {
+    private func issueView(
+        _ issue: ChatViewModel.Issue
+    ) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: issueIconName(issue))
                 .foregroundStyle(.red)
@@ -215,7 +305,7 @@ struct ContentView: View {
             return .working
         }
 
-        if viewModel.latestReply != nil {
+        if showSuccess {
             return .success
         }
 
