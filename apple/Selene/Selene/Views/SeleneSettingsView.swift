@@ -48,7 +48,9 @@ struct SeleneSettingsView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 24)
             }
-            .background(Color(red: 11 / 255, green: 11 / 255, blue: 16 / 255))
+            .background(
+                Color(red: 11 / 255, green: 11 / 255, blue: 16 / 255)
+            )
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.large)
             .navigationDestination(for: String.self) { destination in
@@ -58,7 +60,7 @@ struct SeleneSettingsView: View {
 
                 case "appIcon":
                     SeleneAppIconView()
-                
+
                 case "connection":
                     SeleneConnectionView()
 
@@ -119,6 +121,7 @@ private struct SeleneAppearanceView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
+
                 NavigationLink(value: "appIcon") {
                     HStack(spacing: 14) {
                         Image(systemName: "app")
@@ -163,17 +166,19 @@ private struct SeleneAppearanceView: View {
             .padding(.horizontal, 20)
             .padding(.top, 24)
         }
-        .background(Color(red: 11 / 255, green: 11 / 255, blue: 16 / 255))
+        .background(
+            Color(red: 11 / 255, green: 11 / 255, blue: 16 / 255)
+        )
         .navigationTitle("Appearance")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
 
-// MARK: - App Icon Prototype
+// MARK: - App Icon
 
 private struct SeleneAppIconView: View {
-    @State private var iconError: String?
 
+    @State private var iconError: String?
     @State private var selectedIcon = "default"
 
     private let accentColor = Color(
@@ -223,7 +228,9 @@ private struct SeleneAppIconView: View {
             .padding(.horizontal, 20)
             .padding(.top, 24)
         }
-        .background(Color(red: 11 / 255, green: 11 / 255, blue: 16 / 255))
+        .background(
+            Color(red: 11 / 255, green: 11 / 255, blue: 16 / 255)
+        )
         .navigationTitle("App Icon")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
@@ -294,8 +301,10 @@ private struct SeleneAppIconView: View {
         }
         .buttonStyle(.plain)
     }
+
     private func changeIcon(to identifier: String) {
         iconError = nil
+
         let alternateIconName: String? =
             identifier == "red" ? "Selene-Red" : nil
 
@@ -315,9 +324,12 @@ private struct SeleneAppIconView: View {
         }
     }
 }
+
 // MARK: - Connection
 
 private struct SeleneConnectionView: View {
+
+    @State private var connectionStatus = "Status not checked"
 
     var body: some View {
         ScrollView {
@@ -335,16 +347,21 @@ private struct SeleneConnectionView: View {
 
                 connectionRow(
                     title: "Companion API",
-                    detail: "Status not checked",
+                    detail: connectionStatus,
                     systemImage: "network"
                 )
             }
             .padding(.horizontal, 20)
             .padding(.top, 24)
         }
-        .background(Color(red: 11 / 255, green: 11 / 255, blue: 16 / 255))
+        .background(
+            Color(red: 11 / 255, green: 11 / 255, blue: 16 / 255)
+        )
         .navigationTitle("Connection")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            checkConnection()
+}
     }
 
     private func connectionRow(
@@ -385,5 +402,39 @@ private struct SeleneConnectionView: View {
             RoundedRectangle(cornerRadius: 18)
                 .stroke(.white.opacity(0.075), lineWidth: 1)
         }
+    }
+
+    private func checkConnection() {
+        guard let url = URL(
+            string: "http://192.168.6.136:8787/health"
+        ) else {
+            connectionStatus = "Invalid server address"
+            return
+        }
+
+        connectionStatus = "Checking..."
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 5
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            let isConnected: Bool
+
+            if error == nil,
+               let httpResponse = response as? HTTPURLResponse,
+               httpResponse.statusCode == 200,
+               let data,
+               let json = try? JSONSerialization.jsonObject(with: data)
+                   as? [String: Any],
+               let ok = json["ok"] as? Bool {
+                isConnected = ok
+            } else {
+                isConnected = false
+            }
+
+            DispatchQueue.main.async {
+                connectionStatus = isConnected ? "Connected" : "Unavailable"
+            }
+        }.resume()
     }
 }
