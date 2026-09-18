@@ -4,6 +4,8 @@ struct SeleneNavigationMenu: View {
     @Binding var isPresented: Bool
     @Binding var selectedDestination: SeleneDestination
 
+    var isButtonVisible: Bool = true
+
     var onOpen: () -> Void = {}
     
     private let accentColor = Color(
@@ -20,8 +22,10 @@ struct SeleneNavigationMenu: View {
                     .zIndex(0)
             }
 
-            navigationControls
-                .zIndex(1)
+            if isButtonVisible {
+                navigationControls
+                    .zIndex(1)
+            }
         }
     }
 

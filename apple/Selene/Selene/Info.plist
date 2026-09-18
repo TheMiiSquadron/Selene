@@ -7,7 +7,5 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Selene connects to your assistant on your local network.</string>
 </dict>
 </plist>

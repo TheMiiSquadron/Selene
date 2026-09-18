@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var showSuccess = false
     @State private var isNavigationPresented = false
     @State private var selectedDestination: SeleneDestination = .conversation
+    @State private var isSettingsSubpageOpen = false
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -26,13 +27,16 @@ struct ContentView: View {
                     SeleneInboxView()
 
                 case .settings:
-                    SeleneSettingsView()
+                    SeleneSettingsView(
+                        isSubpageOpen: $isSettingsSubpageOpen
+                    )
                 }
             }
 
             SeleneNavigationMenu(
                 isPresented: $isNavigationPresented,
                 selectedDestination: $selectedDestination,
+                isButtonVisible: !isSettingsSubpageOpen,
                 onOpen: {
                     isMessageFocused = false
                 }
