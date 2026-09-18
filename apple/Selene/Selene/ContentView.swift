@@ -6,19 +6,33 @@ struct ContentView: View {
     @FocusState private var isMessageFocused: Bool
     @State private var showSuccess = false
     @State private var isNavigationPresented = false
+    @State private var selectedDestination: SeleneDestination = .conversation
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             background
 
             VStack(spacing: 0) {
-                identity
-                conversation
-                composer
+                switch selectedDestination {
+                case .conversation:
+                    identity
+                    conversation
+                    composer
+
+                case .activity:
+                    SeleneActivityView()
+
+                case .inbox:
+                    SeleneInboxView()
+
+                case .settings:
+                    SeleneSettingsView()
+                }
             }
 
             SeleneNavigationMenu(
                 isPresented: $isNavigationPresented,
+                selectedDestination: $selectedDestination,
                 onOpen: {
                     isMessageFocused = false
                 }

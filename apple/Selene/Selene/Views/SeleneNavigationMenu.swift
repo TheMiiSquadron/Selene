@@ -2,9 +2,10 @@ import SwiftUI
 
 struct SeleneNavigationMenu: View {
     @Binding var isPresented: Bool
+    @Binding var selectedDestination: SeleneDestination
 
     var onOpen: () -> Void = {}
-
+    
     private let accentColor = Color(
         red: 139.0 / 255.0,
         green: 124.0 / 255.0,
@@ -121,19 +122,18 @@ struct SeleneNavigationMenu: View {
             navigationRow(
                 title: "Conversation",
                 systemImage: "bubble.left.and.bubble.right",
-                isSelected: true
+                isSelected: selectedDestination == .conversation
             ) {
-                closeNavigation()
+                selectDestination(.conversation)
             }
-
             navigationDivider
 
             navigationRow(
                 title: "Activity",
                 systemImage: "clock",
-                isSelected: false
+                isSelected: selectedDestination == .activity
             ) {
-                // Destination added in the next pass.
+                selectDestination(.activity)
             }
 
             navigationDivider
@@ -141,9 +141,9 @@ struct SeleneNavigationMenu: View {
             navigationRow(
                 title: "Inbox",
                 systemImage: "tray",
-                isSelected: false
+                isSelected: selectedDestination == .inbox
             ) {
-                // Destination added in the next pass.
+                selectDestination(.inbox)
             }
 
             navigationDivider
@@ -151,9 +151,9 @@ struct SeleneNavigationMenu: View {
             navigationRow(
                 title: "Settings",
                 systemImage: "gearshape",
-                isSelected: false
+                isSelected: selectedDestination == .settings
             ) {
-                // Destination added in the next pass.
+                selectDestination(.settings)
             }
         }
         .padding(7)
@@ -252,7 +252,10 @@ struct SeleneNavigationMenu: View {
     }
 
     // MARK: - Actions
-
+    private func selectDestination(_ destination: SeleneDestination) {
+        selectedDestination = destination
+        closeNavigation()
+    }
     private func closeNavigation() {
         withAnimation(
             .spring(
