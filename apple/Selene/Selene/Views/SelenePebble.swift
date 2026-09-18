@@ -675,7 +675,7 @@ private struct PebbleShape: InsettableShape {
         let largeRadius = side * 0.50
         let smallRadius = side * 0.115
 
-        var path = Path(
+        let path = Path(
             roundedRect: square,
             cornerRadii: RectangleCornerRadii(
                 topLeading: largeRadius,

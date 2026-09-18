@@ -17,12 +17,12 @@ struct ContentView: View {
                 composer
             }
 
-            if isNavigationPresented {
-                navigationDismissLayer
-                    .transition(.opacity)
-            }
-
-            navigationControls
+            SeleneNavigationMenu(
+                isPresented: $isNavigationPresented,
+                onOpen: {
+                    isMessageFocused = false
+                }
+            )
         }
         .preferredColorScheme(.dark)
         .onChange(of: viewModel.isSending) { wasSending, isSending in
@@ -45,7 +45,6 @@ struct ContentView: View {
             }
         }
     }
-
     // MARK: - Background
 
     private var background: some View {
@@ -56,240 +55,7 @@ struct ContentView: View {
         )
         .ignoresSafeArea()
     }
-
-    // MARK: - Navigation
-
-    private var navigationDismissLayer: some View {
-        Color.black
-            .opacity(0.18)
-            .ignoresSafeArea()
-            .contentShape(Rectangle())
-            .onTapGesture {
-                closeNavigation()
-            }
-    }
-
-    private var navigationControls: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            navigationButton
-
-            if isNavigationPresented {
-                navigationMenu
-                    .transition(
-                        .asymmetric(
-                            insertion:
-                                .scale(
-                                    scale: 0.88,
-                                    anchor: .topLeading
-                                )
-                                .combined(with: .opacity),
-                            removal:
-                                .scale(
-                                    scale: 0.94,
-                                    anchor: .topLeading
-                                )
-                                .combined(with: .opacity)
-                        )
-                    )
-            }
-        }
-        .padding(.leading, 16)
-        .padding(.top, 8)
-    }
-
-    private var navigationButton: some View {
-        Button {
-            isMessageFocused = false
-
-            withAnimation(
-                .spring(
-                    response: 0.30,
-                    dampingFraction: 0.82
-                )
-            ) {
-                isNavigationPresented.toggle()
-            }
-        } label: {
-            ZStack {
-                Circle()
-                    .fill(Color.white.opacity(0.065))
-
-                Circle()
-                    .stroke(
-                        Color.white.opacity(0.09),
-                        lineWidth: 1
-                    )
-
-                Image(
-                    systemName:
-                        isNavigationPresented
-                            ? "xmark"
-                            : "line.3.horizontal"
-                )
-                .font(
-                    .system(
-                        size: isNavigationPresented ? 14 : 16,
-                        weight: .semibold
-                    )
-                )
-                .foregroundStyle(.white.opacity(0.74))
-                .contentTransition(.symbolEffect(.replace))
-            }
-            .frame(width: 38, height: 38)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(
-            isNavigationPresented
-                ? "Close Selene navigation"
-                : "Open Selene navigation"
-        )
-    }
-
-    private var navigationMenu: some View {
-        VStack(spacing: 2) {
-            navigationRow(
-                title: "Conversation",
-                systemImage: "bubble.left.and.bubble.right",
-                isSelected: true
-            ) {
-                closeNavigation()
-            }
-
-            navigationDivider
-
-            navigationRow(
-                title: "Activity",
-                systemImage: "clock",
-                isSelected: false
-            ) {
-                // Destination added in a later pass.
-            }
-
-            navigationDivider
-
-            navigationRow(
-                title: "Inbox",
-                systemImage: "tray",
-                isSelected: false
-            ) {
-                // Destination added in a later pass.
-            }
-
-            navigationDivider
-
-            navigationRow(
-                title: "Settings",
-                systemImage: "gearshape",
-                isSelected: false
-            ) {
-                // Destination added in a later pass.
-            }
-        }
-        .padding(7)
-        .frame(width: 238)
-        .background {
-            RoundedRectangle(
-                cornerRadius: 20,
-                style: .continuous
-            )
-            .fill(.ultraThinMaterial)
-        }
-        .overlay {
-            RoundedRectangle(
-                cornerRadius: 20,
-                style: .continuous
-            )
-            .fill(Color.black.opacity(0.16))
-        }
-        .overlay {
-            RoundedRectangle(
-                cornerRadius: 20,
-                style: .continuous
-            )
-            .stroke(
-                Color.white.opacity(0.10),
-                lineWidth: 1
-            )
-        }
-        .shadow(
-            color: .black.opacity(0.30),
-            radius: 22,
-            x: 0,
-            y: 10
-        )
-    }
-
-    private var navigationDivider: some View {
-        Rectangle()
-            .fill(Color.white.opacity(0.055))
-            .frame(height: 1)
-            .padding(.leading, 42)
-            .padding(.trailing, 8)
-    }
-
-    private func navigationRow(
-        title: String,
-        systemImage: String,
-        isSelected: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(
-                        isSelected
-                            ? Color(hex: 0x8B7CFF)
-                            : Color.white.opacity(0.68)
-                    )
-                    .frame(width: 24)
-
-                Text(title)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(
-                        isSelected
-                            ? Color.white
-                            : Color.white.opacity(0.86)
-                    )
-
-                Spacer()
-
-                if isSelected {
-                    Circle()
-                        .fill(Color(hex: 0x8B7CFF))
-                        .frame(width: 6, height: 6)
-                }
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 45)
-            .contentShape(Rectangle())
-            .background {
-                if isSelected {
-                    RoundedRectangle(
-                        cornerRadius: 13,
-                        style: .continuous
-                    )
-                    .fill(
-                        Color(hex: 0x8B7CFF)
-                            .opacity(0.09)
-                    )
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func closeNavigation() {
-        withAnimation(
-            .spring(
-                response: 0.28,
-                dampingFraction: 0.86
-            )
-        ) {
-            isNavigationPresented = false
-        }
-    }
-
+    
     // MARK: - Selene identity
 
     private var identity: some View {
@@ -312,7 +78,6 @@ struct ContentView: View {
         .padding(.top, 30)
         .padding(.bottom, 24)
     }
-
     // MARK: - Conversation
 
     private var conversation: some View {
