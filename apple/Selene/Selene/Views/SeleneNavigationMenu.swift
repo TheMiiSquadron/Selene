@@ -102,7 +102,7 @@ struct SeleneNavigationMenu: View {
                 )
                 .font(
                     .system(
-                        size: isPresented ? 14 : 16,
+                        size: isPresented ? 18 : 20,
                         weight: .semibold
                     )
                 )
