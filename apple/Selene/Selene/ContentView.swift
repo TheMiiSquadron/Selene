@@ -43,9 +43,6 @@ struct ContentView: View {
             )
         }
         .preferredColorScheme(.dark)
-        .task {
-            await viewModel.checkConnection()
-        }
         .onChange(of: viewModel.isSending) { wasSending, isSending in
             guard wasSending && !isSending else {
                 return
@@ -82,7 +79,7 @@ struct ContentView: View {
     private var identity: some View {
         VStack(spacing: 14) {
             SelenePebble(
-                state: nativePebbleState,
+                state: pebbleState,
                 size: 76
             )
 
@@ -91,7 +88,7 @@ struct ContentView: View {
                     .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(.white)
 
-                Text(viewModel.statusText)
+                Text(statusText)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.secondary)
             }
@@ -335,9 +332,42 @@ struct ContentView: View {
 
     // MARK: - Pebble state
 
-    private var nativePebbleState: SelenePebble.State {
-        let state = SelenePebble.State(viewModel.pebbleState)
-        return showSuccess && state == .idle ? .success : state
+    private var pebbleState: SelenePebble.State {
+        if viewModel.issue != nil {
+            return .error
+        }
+
+        if viewModel.isBusy {
+            return .working
+        }
+
+        if showSuccess {
+            return .success
+        }
+
+        return .idle
+    }
+
+    private var statusText: String {
+        switch pebbleState {
+        case .idle:
+            return "I'm here."
+
+        case .working:
+            return "I'm working."
+
+        case .success:
+            return "Done."
+
+        case .asking:
+            return "I need you."
+
+        case .error:
+            return "I couldn't proceed."
+
+        case .proactive:
+            return "I have something for you."
+        }
     }
 
     // MARK: - Actions
@@ -364,24 +394,6 @@ struct ContentView: View {
 
         case .server:
             return "exclamationmark.triangle.fill"
-        }
-    }
-}
-
-extension SelenePebble.State {
-    init(_ chatState: ChatViewModel.PebbleState) {
-        switch chatState {
-        case .neutral, .connected:
-            self = .idle
-
-        case .working:
-            self = .working
-
-        case .attention:
-            self = .asking
-
-        case .error:
-            self = .error
         }
     }
 }

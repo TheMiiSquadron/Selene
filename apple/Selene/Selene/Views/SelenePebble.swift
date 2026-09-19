@@ -7,17 +7,9 @@ import SwiftUI
 /// animation change.
 struct SelenePebble: View {
 
-    struct IdleVisualValues: Equatable {
-        let internalBaseOpacity: Double
-        let internalBloomOpacity: Double
-        let externalGlowOpacity: Double
-        let glowScale: CGFloat
-        let internalLightScale: CGFloat
-    }
-
     // MARK: - State
 
-    enum State: CaseIterable, Equatable {
+    enum State: CaseIterable {
         case idle
         case working
         case success
@@ -84,20 +76,6 @@ struct SelenePebble: View {
 
     private var palette: Palette {
         state.palette
-    }
-
-    static func idleVisualValues(isExpanded: Bool) -> IdleVisualValues {
-        IdleVisualValues(
-            internalBaseOpacity: 0.26,
-            internalBloomOpacity: 0.30,
-            externalGlowOpacity: isExpanded ? 0.075 : 0.055,
-            glowScale: isExpanded ? 1.02 : 0.99,
-            internalLightScale: isExpanded ? 1.005 : 0.995
-        )
-    }
-
-    private var idleVisualValues: IdleVisualValues {
-        Self.idleVisualValues(isExpanded: breathing)
     }
 
     // MARK: - Body
@@ -429,7 +407,7 @@ struct SelenePebble: View {
     private var internalBaseOpacity: Double {
         switch state {
         case .idle:
-            return idleVisualValues.internalBaseOpacity
+            return breathing ? 0.26 : 0.20
 
         case .working:
             return breathing ? 0.74 : 0.58
@@ -451,7 +429,7 @@ struct SelenePebble: View {
     private var internalBloomOpacity: Double {
         switch state {
         case .idle:
-            return idleVisualValues.internalBloomOpacity
+            return breathing ? 0.30 : 0.22
 
         case .working:
             return breathing ? 0.82 : 0.62
@@ -473,7 +451,7 @@ struct SelenePebble: View {
     private var externalGlowOpacity: Double {
         switch state {
         case .idle:
-            return idleVisualValues.externalGlowOpacity
+            return breathing ? 0.08 : 0.05
 
         case .working:
             return breathing ? 0.20 : 0.12
@@ -523,7 +501,7 @@ struct SelenePebble: View {
 
         switch state {
         case .idle:
-            return idleVisualValues.glowScale
+            return breathing ? 1.04 : 0.98
 
         case .working:
             return breathing ? 1.07 : 0.98
@@ -546,7 +524,7 @@ struct SelenePebble: View {
 
         switch state {
         case .idle:
-            return idleVisualValues.internalLightScale
+            return breathing ? 1.015 : 0.99
 
         case .working:
             return breathing ? 1.025 : 0.99

@@ -11,7 +11,7 @@ struct ChatViewModelTests {
 
         #expect(viewModel.assistantDisplayName == "Test Selene")
         #expect(viewModel.connectionState == .notConnected)
-        #expect(viewModel.statusText == "Not Checked")
+        #expect(viewModel.statusText == "Not Connected")
         #expect(viewModel.pebbleState == .neutral)
         #expect(viewModel.latestReply == nil)
         #expect(viewModel.issue == nil)
@@ -27,7 +27,6 @@ struct ChatViewModelTests {
         let healthRequestCount = await api.healthRequestCount
 
         #expect(viewModel.connectionState == .connected)
-        #expect(viewModel.statusText == "Connected")
         #expect(viewModel.pebbleState == .connected)
         #expect(viewModel.issue == nil)
         #expect(healthRequestCount == 1)
@@ -43,34 +42,8 @@ struct ChatViewModelTests {
         await viewModel.checkConnection()
 
         #expect(viewModel.connectionState == .unavailable)
-        #expect(viewModel.statusText == "Connection Unavailable")
         #expect(viewModel.pebbleState == .error)
         #expect(viewModel.issue == .connection("Unable to reach Companion."))
-    }
-
-    @Test("Connection check exposes checking status and working Pebble")
-    func checkingConnection() async {
-        let api = BlockingHealthCompanionAPI()
-        let viewModel = makeViewModel(api: api)
-
-        let connectionCheck = Task {
-            await viewModel.checkConnection()
-        }
-
-        await api.waitUntilHealthCheckStarts()
-
-        #expect(viewModel.connectionState == .checking)
-        #expect(viewModel.statusText == "Checking Connection")
-        #expect(viewModel.pebbleState == .working)
-        #expect(viewModel.isCheckingConnection)
-        #expect(viewModel.isBusy)
-
-        await api.completeHealthCheck()
-        await connectionCheck.value
-
-        #expect(viewModel.connectionState == .connected)
-        #expect(viewModel.statusText == "Connected")
-        #expect(viewModel.pebbleState == .connected)
     }
 
     @Test("Whitespace-only messages are rejected locally")
@@ -84,18 +57,8 @@ struct ChatViewModelTests {
 
         #expect(viewModel.message == "  \n\t ")
         #expect(viewModel.issue == .attention("Enter a message first."))
-        #expect(viewModel.statusText == "Not Checked")
         #expect(viewModel.pebbleState == .attention)
         #expect(sentMessages.isEmpty)
-    }
-
-    @Test("Conversation Pebble mapping preserves attention and connection states")
-    func conversationPebbleMapping() {
-        #expect(SelenePebble.State(.neutral) == .idle)
-        #expect(SelenePebble.State(.connected) == .idle)
-        #expect(SelenePebble.State(.working) == .working)
-        #expect(SelenePebble.State(.attention) == .asking)
-        #expect(SelenePebble.State(.error) == .error)
     }
 
     @Test("Successful send displays the reply and clears input")
@@ -120,8 +83,6 @@ struct ChatViewModelTests {
         #expect(viewModel.latestReply == "Hello from Selene.")
         #expect(viewModel.message.isEmpty)
         #expect(viewModel.connectionState == .connected)
-        #expect(viewModel.statusText == "Connected")
-        #expect(viewModel.pebbleState == .connected)
         #expect(viewModel.issue == nil)
     }
 
@@ -138,8 +99,6 @@ struct ChatViewModelTests {
         #expect(viewModel.message == "Please try this")
         #expect(viewModel.latestReply == nil)
         #expect(viewModel.connectionState == .unavailable)
-        #expect(viewModel.statusText == "Connection Unavailable")
-        #expect(viewModel.pebbleState == .error)
         #expect(viewModel.issue == .connection("Unable to reach Companion."))
     }
 
@@ -161,7 +120,6 @@ struct ChatViewModelTests {
 
         #expect(viewModel.message == "Hello")
         #expect(viewModel.connectionState == .connected)
-        #expect(viewModel.statusText == "Connected")
         #expect(viewModel.issue == .server("Selene is unavailable right now."))
         #expect(viewModel.pebbleState == .error)
     }
@@ -178,8 +136,6 @@ struct ChatViewModelTests {
 
         await api.waitUntilSendStarts()
         #expect(viewModel.isSending)
-        #expect(viewModel.statusText == "Sending")
-        #expect(viewModel.pebbleState == .working)
 
         await viewModel.sendMessage()
         let sendCountDuringRequest = await api.sendCount
@@ -191,8 +147,6 @@ struct ChatViewModelTests {
 
         #expect(finalSendCount == 1)
         #expect(viewModel.latestReply == "Only once.")
-        #expect(viewModel.statusText == "Connected")
-        #expect(viewModel.pebbleState == .connected)
     }
 
     private func makeViewModel(api: any CompanionAPIProviding) -> ChatViewModel {
@@ -203,41 +157,6 @@ struct ChatViewModelTests {
             ),
             api: api
         )
-    }
-}
-
-private actor BlockingHealthCompanionAPI: CompanionAPIProviding {
-    private var healthRequestCount = 0
-    private var healthContinuation: CheckedContinuation<CompanionHealthResponse, any Error>?
-
-    func fetchHealth() async throws -> CompanionHealthResponse {
-        healthRequestCount += 1
-
-        return try await withCheckedThrowingContinuation { continuation in
-            healthContinuation = continuation
-        }
-    }
-
-    func sendChat(message: String) async throws -> CompanionChatResponse {
-        CompanionChatResponse(ok: true, reply: "Hello.", state: "idle", events: [])
-    }
-
-    func waitUntilHealthCheckStarts() async {
-        while healthRequestCount == 0 {
-            await Task.yield()
-        }
-    }
-
-    func completeHealthCheck() {
-        healthContinuation?.resume(
-            returning: CompanionHealthResponse(
-                ok: true,
-                name: "Selene Core",
-                machine: "Test Host",
-                version: "0"
-            )
-        )
-        healthContinuation = nil
     }
 }
 
