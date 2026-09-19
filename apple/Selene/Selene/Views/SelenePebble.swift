@@ -9,7 +9,7 @@ struct SelenePebble: View {
 
     // MARK: - State
 
-    enum State: CaseIterable {
+    enum State: CaseIterable, Equatable {
         case idle
         case working
         case success

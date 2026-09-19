@@ -103,7 +103,7 @@ final class ChatViewModel {
 
         switch connectionState {
         case .notConnected:
-            return "Not Connected"
+            return "Not Checked"
 
         case .checking:
             return "Checking Connection"
