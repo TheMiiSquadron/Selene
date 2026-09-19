@@ -73,7 +73,7 @@ struct ContentView: View {
         )
         .ignoresSafeArea()
     }
-    
+
     // MARK: - Selene identity
 
     private var identity: some View {
@@ -226,6 +226,7 @@ struct ContentView: View {
                     .font(.system(size: 18, weight: .medium))
                     .foregroundStyle(.white.opacity(0.72))
                     .frame(width: 34, height: 34)
+                    .seleneCompactButtonSize()
             }
             .buttonStyle(.plain)
 
@@ -267,6 +268,7 @@ struct ContentView: View {
                     }
                 }
                 .frame(width: 32, height: 32)
+                .seleneCompactButtonSize()
             }
             .buttonStyle(.plain)
             .disabled(!viewModel.canSend)

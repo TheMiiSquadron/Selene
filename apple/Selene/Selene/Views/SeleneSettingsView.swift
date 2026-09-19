@@ -364,7 +364,7 @@ private struct SeleneConnectionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             checkConnection()
-}
+        }
     }
 
     private func connectionRow(

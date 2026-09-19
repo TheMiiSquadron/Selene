@@ -7,7 +7,7 @@ struct SeleneNavigationMenu: View {
     var isButtonVisible: Bool = true
 
     var onOpen: () -> Void = {}
-    
+
     private let accentColor = Color(
         red: 139.0 / 255.0,
         green: 124.0 / 255.0,
@@ -109,7 +109,7 @@ struct SeleneNavigationMenu: View {
                 .foregroundStyle(.white.opacity(0.74))
                 .contentTransition(.symbolEffect(.replace))
             }
-            .frame(width: 38, height: 38)
+            .seleneCompactButtonSize()
         }
         .buttonStyle(.plain)
         .accessibilityLabel(
@@ -256,10 +256,12 @@ struct SeleneNavigationMenu: View {
     }
 
     // MARK: - Actions
+
     private func selectDestination(_ destination: SeleneDestination) {
         selectedDestination = destination
         closeNavigation()
     }
+
     private func closeNavigation() {
         withAnimation(
             .spring(
