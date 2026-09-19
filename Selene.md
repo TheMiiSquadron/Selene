@@ -124,7 +124,7 @@ The Pillars begin once the initial Homes and shared infrastructure provide a sta
 | Milestone                           | Status               |
 | ----------------------------------- | -------------------- |
 | Conversation Store v1.0             | Complete             |
-| Conversation Access v1.0 — Security | Audit pending review |
+| Conversation Access v1.0 — Security | Credential foundation in review |
 | Conversation Access v1.1 — API      | Planned              |
 | Conversation Chat integration       | Planned              |
 | iPhone conversation integration     | Planned              |
@@ -150,13 +150,16 @@ Storage exists, but it is not yet integrated with the Companion API or iPhone Ho
 * Local-first operation
 * Explicit authority for privileged actions
 * Separate Home credentials from Core authority permissions
+* Independently revocable bearer credentials for each Home
+* Gateway capabilities: `chat`, `conversation:read`, and `conversation:write`
 * No direct exposure of privileged Core interfaces
 * Authentication before exposing private conversation history
 * Protected transport for credentials and private data
 * Device-specific access and revocation
 * No secrets committed to the repository
 
-Specific authentication and pairing mechanisms remain under review.
+The Gateway credential model and capabilities are approved. Transport,
+pairing, and iPhone credential storage remain pending design decisions.
 
 ---
 
@@ -187,9 +190,11 @@ Do not treat unverified builds or tests as successful.
 
 Review the Companion API's authentication, LAN exposure, transport, credential storage, and compatibility with the existing iPhone connection check.
 
-The security audit is pending review.
+The security audit is complete. The credential model and capabilities are
+approved; transport, pairing, and iPhone credential storage remain pending.
 
-No conversation HTTP endpoints or Apple changes should be implemented until the design is approved.
+No conversation HTTP endpoints or Apple changes should be implemented until
+the remaining design decisions are approved.
 
 ---
 
@@ -203,7 +208,8 @@ No conversation HTTP endpoints or Apple changes should be implemented until the 
 | Web Companion website development paused          | Approved         |
 | Companion API retained                            | Approved         |
 | Constellation initially limited to Alex's devices | Approved         |
-| Authentication and pairing design                 | Pending          |
+| Per-Home Gateway bearer credentials and capabilities | Approved      |
+| Transport, pairing, and iPhone credential storage | Pending          |
 | Twelve Pillar definitions                         | To be documented |
 
 ---
