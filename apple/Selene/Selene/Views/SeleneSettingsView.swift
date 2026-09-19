@@ -64,6 +64,9 @@ struct SeleneSettingsView: View {
                 case "connection":
                     SeleneConnectionView()
 
+                case "about":
+                    SeleneAboutView()
+
                 default:
                     EmptyView()
                 }
@@ -436,5 +439,80 @@ private struct SeleneConnectionView: View {
                 connectionStatus = isConnected ? "Connected" : "Unavailable"
             }
         }.resume()
+    }
+}
+// MARK: - About Selene
+
+private struct SeleneAboutView: View {
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+            ?? "Unknown"
+    }
+
+    private var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String
+            ?? "Unknown"
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Selene")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(.white)
+
+                    Text("Your personal AI assistant.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.bottom, 8)
+
+                informationRow(
+                    title: "Version",
+                    detail: appVersion
+                )
+
+                informationRow(
+                    title: "Build",
+                    detail: buildNumber
+                )
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 24)
+        }
+        .background(
+            Color(red: 11 / 255, green: 11 / 255, blue: 16 / 255)
+        )
+        .navigationTitle("About Selene")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func informationRow(
+        title: String,
+        detail: String
+    ) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(.white)
+
+            Spacer()
+
+            Text(detail)
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+        }
+        .padding(16)
+        .background {
+            RoundedRectangle(cornerRadius: 18)
+                .fill(.white.opacity(0.055))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(.white.opacity(0.075), lineWidth: 1)
+        }
     }
 }
