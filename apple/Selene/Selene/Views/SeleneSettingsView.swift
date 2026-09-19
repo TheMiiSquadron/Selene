@@ -333,6 +333,7 @@ private struct SeleneAppIconView: View {
 private struct SeleneConnectionView: View {
 
     @State private var connectionStatus = "Status not checked"
+    @State private var isCheckingConnection = false
 
     var body: some View {
         ScrollView {
@@ -353,6 +354,21 @@ private struct SeleneConnectionView: View {
                     detail: connectionStatus,
                     systemImage: "network"
                 )
+
+                Button(action: checkConnection) {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .background {
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(.white.opacity(0.09))
+                        }
+                }
+                .buttonStyle(.plain)
+                .disabled(isCheckingConnection)
+                .opacity(isCheckingConnection ? 0.55 : 1)
             }
             .padding(.horizontal, 20)
             .padding(.top, 24)
@@ -407,11 +423,19 @@ private struct SeleneConnectionView: View {
         }
     }
 
+    @MainActor
     private func checkConnection() {
+        guard !isCheckingConnection else {
+            return
+        }
+
+        isCheckingConnection = true
+
         guard let url = URL(
             string: "http://192.168.6.136:8787/health"
         ) else {
             connectionStatus = "Invalid server address"
+            isCheckingConnection = false
             return
         }
 
@@ -437,6 +461,7 @@ private struct SeleneConnectionView: View {
 
             DispatchQueue.main.async {
                 connectionStatus = isConnected ? "Connected" : "Unavailable"
+                isCheckingConnection = false
             }
         }.resume()
     }
