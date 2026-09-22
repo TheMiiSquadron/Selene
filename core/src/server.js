@@ -39,6 +39,7 @@ import {
 import { awarenessService } from "./awareness.js";
 import { startCompanionServer } from "./companionServer.js";
 import { createGatewayCredentialStore } from "./gatewayCredentialStore.js";
+import { createLocalPairingAdministration } from "./pairingAdministration.js";
 
 const HOST = "127.0.0.1";
 const PORT = 3030;
@@ -634,6 +635,7 @@ export async function startSeleneServers({
   onCompanionListening = console.log,
   onCompanionError = console.error,
   credentialStore = null,
+  pairingAdministration = createLocalPairingAdministration(),
 } = {}) {
   const companionServer = await startCompanionServer({
     port: companionPort,
@@ -652,11 +654,27 @@ export async function startSeleneServers({
       server.once("listening", resolveListening);
       server.once("error", rejectListening);
     });
-    return { server, companionServer };
+    return { server, companionServer, pairingAdministration };
   } catch (error) {
     await new Promise((done) => companionServer.close(done));
     throw error;
   }
+}
+
+export async function closeSeleneServers({
+  server,
+  companionServer,
+  pairingAdministration,
+} = {}) {
+  pairingAdministration?.shutdown?.();
+  await Promise.all([
+    companionServer
+      ? new Promise((done) => companionServer.close(done))
+      : Promise.resolve(),
+    server
+      ? new Promise((done) => server.close(done))
+      : Promise.resolve(),
+  ]);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
@@ -672,13 +690,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   }
 
   if (listeners) {
-    const { server, companionServer } = listeners;
     const shutdown = async () => {
       stopRuntimeServices();
-      await Promise.all([
-        new Promise((done) => companionServer.close(done)),
-        new Promise((done) => server.close(done)),
-      ]);
+      await closeSeleneServers(listeners);
       credentialStore.close();
       process.exit(0);
     };
