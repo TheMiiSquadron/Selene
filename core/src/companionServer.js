@@ -1,5 +1,10 @@
 import http from "node:http";
+import https from "node:https";
+import { createSecureContext } from "node:tls";
+import { readFileSync, realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   CompanionChatValidationError,
   handleCompanionChat,
@@ -11,6 +16,7 @@ export const COMPANION_PORT = 8787;
 export const COMPANION_MAX_BODY_BYTES = 32 * 1024;
 
 const PACKAGE_URL = new URL("../package.json", import.meta.url);
+const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const ALLOWED_ORIGINS = new Set([
   "http://localhost:8080",
   "http://127.0.0.1:8080",
@@ -22,16 +28,94 @@ export function resolveCompanionHost(env = process.env) {
     : COMPANION_HOST;
 }
 
-function companionListeningMessage(host, port) {
+export class CompanionTransportConfigurationError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "CompanionTransportConfigurationError";
+  }
+}
+
+function isWithin(path, directory) {
+  const difference = relative(directory, path);
+  return difference === "" || (
+    difference !== ".."
+    && !difference.startsWith(`..${sep}`)
+    && !isAbsolute(difference)
+  );
+}
+
+function readTlsFile(path, label) {
+  if (typeof path !== "string" || !isAbsolute(path)) {
+    throw new CompanionTransportConfigurationError(`${label} must be an absolute path.`);
+  }
+  if (isWithin(resolve(path), REPOSITORY_ROOT)) {
+    throw new CompanionTransportConfigurationError(`${label} must be outside the repository.`);
+  }
+
+  let contents;
+  try {
+    const actualPath = realpathSync(path);
+    if (isWithin(actualPath, realpathSync(REPOSITORY_ROOT))) {
+      throw new CompanionTransportConfigurationError(`${label} must be outside the repository.`);
+    }
+    contents = readFileSync(actualPath);
+  } catch (error) {
+    if (error instanceof CompanionTransportConfigurationError) throw error;
+    throw new CompanionTransportConfigurationError(`${label} is missing or unreadable.`);
+  }
+  if (contents.length === 0) {
+    throw new CompanionTransportConfigurationError(`${label} must not be empty.`);
+  }
+  return contents;
+}
+
+export function prepareCompanionTransport(env = process.env) {
+  const flag = env.SELENE_COMPANION_HTTPS;
+  if (flag !== undefined && flag !== "" && flag !== "0" && flag !== "1") {
+    throw new CompanionTransportConfigurationError(
+      "SELENE_COMPANION_HTTPS must be 1, 0, or unset.",
+    );
+  }
+
+  const enabled = flag === "1";
+  const certPath = env.SELENE_COMPANION_TLS_CERT_PATH;
+  const keyPath = env.SELENE_COMPANION_TLS_KEY_PATH;
+  if (!enabled) {
+    if (certPath !== undefined || keyPath !== undefined) {
+      throw new CompanionTransportConfigurationError(
+        "TLS paths require SELENE_COMPANION_HTTPS=1.",
+      );
+    }
+    return { host: resolveCompanionHost(env), tlsOptions: null };
+  }
+
+  if (!certPath || !keyPath) {
+    throw new CompanionTransportConfigurationError(
+      "HTTPS requires both certificate and private-key paths.",
+    );
+  }
+  const cert = readTlsFile(certPath, "TLS certificate");
+  const key = readTlsFile(keyPath, "TLS private key");
+  try {
+    createSecureContext({ cert, key });
+  } catch {
+    throw new CompanionTransportConfigurationError(
+      "TLS certificate or private key is invalid or mismatched.",
+    );
+  }
+  return { host: resolveCompanionHost(env), tlsOptions: { cert, key } };
+}
+
+function companionListeningMessage(host, port, scheme) {
   if (host === COMPANION_LAN_HOST) {
-    return `Selene Companion API listening on port ${port} (LAN mode enabled).`;
+    return `Selene Companion API listening on ${scheme} port ${port} (LAN mode enabled).`;
   }
 
   if (host === COMPANION_HOST) {
-    return `Selene Companion API listening on http://${host}:${port} (loopback only).`;
+    return `Selene Companion API listening on ${scheme}://${host}:${port} (loopback only).`;
   }
 
-  return `Selene Companion API listening on http://${host}:${port} (custom bind).`;
+  return `Selene Companion API listening on ${scheme}://${host}:${port} (custom bind).`;
 }
 
 async function getCoreVersion() {
@@ -187,8 +271,9 @@ export function createCompanionServer({
   machine = "NOVA",
   name = "Selene Core",
   chatHandler = handleCompanionChat,
+  tlsOptions = null,
 } = {}) {
-  const server = http.createServer(async (request, response) => {
+  const handler = async (request, response) => {
     const url = new URL(request.url ?? "/", `http://${host}:${port}`);
 
     if (request.method === "OPTIONS") {
@@ -226,9 +311,11 @@ export function createCompanionServer({
       ok: false,
       message: "Not found.",
     });
-  });
+  };
 
-  return server;
+  return tlsOptions
+    ? https.createServer(tlsOptions, handler)
+    : http.createServer(handler);
 }
 
 export function startCompanionServer({
@@ -237,11 +324,21 @@ export function startCompanionServer({
   env = process.env,
   onListening = console.log,
   onError = console.error,
+  transport,
 } = {}) {
-  const bindHost = typeof host === "undefined"
-    ? resolveCompanionHost(env)
-    : host;
-  const server = createCompanionServer({ host: bindHost, port });
+  if (transport !== undefined) {
+    throw new CompanionTransportConfigurationError(
+      "Companion transport overrides are not supported; configure HTTPS through the environment.",
+    );
+  }
+  const configuration = prepareCompanionTransport(env);
+  const bindHost = host ?? configuration.host;
+  const scheme = configuration.tlsOptions ? "https" : "http";
+  const server = createCompanionServer({
+    host: bindHost,
+    port,
+    tlsOptions: configuration.tlsOptions,
+  });
 
   return new Promise((resolve) => {
     let settled = false;
@@ -258,14 +355,14 @@ export function startCompanionServer({
     server.once("error", (error) => {
       if (error.code === "EADDRINUSE") {
         onError(
-          `Selene Companion API could not start on http://${bindHost}:${port}: port is already in use.`,
+          `Selene Companion API could not start on ${scheme}://${bindHost}:${port}: port is already in use.`,
         );
         settle(null);
         return;
       }
 
       onError(
-        `Selene Companion API could not start on http://${bindHost}:${port}: ${error.message}`,
+        `Selene Companion API could not start on ${scheme}://${bindHost}:${port}: ${error.message}`,
       );
       settle(null);
     });
@@ -275,7 +372,7 @@ export function startCompanionServer({
       const listeningPort = typeof address === "object" && address
         ? address.port
         : port;
-      onListening(companionListeningMessage(bindHost, listeningPort));
+      onListening(companionListeningMessage(bindHost, listeningPort, scheme));
       settle(server);
     });
   });

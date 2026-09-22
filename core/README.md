@@ -53,21 +53,41 @@ Setup/status endpoints:
 
 The command server on port `3030` is privileged and remains loopback-only.
 
-## Companion LAN access
+## Companion transport and LAN access
 
-The non-privileged Companion API listens on `127.0.0.1:8787` by default. To
-make only this API reachable from trusted devices on the local network, start
-Core with the explicit LAN flag:
+The non-privileged Companion API listens over HTTP on `127.0.0.1:8787` by
+default. Optional HTTPS uses Node's built-in TLS server and the same routes on
+port `8787`. Set all three variables before starting Core:
+
+    $env:SELENE_COMPANION_HTTPS = "1"
+    $env:SELENE_COMPANION_TLS_CERT_PATH = "C:\SeleneSecrets\cert.pem"
+    $env:SELENE_COMPANION_TLS_KEY_PATH = "C:\SeleneSecrets\key.pem"
+    npm start
+
+The certificate may be a PEM chain; the key must be the matching PEM private
+key. Both paths must be absolute and outside the repository, including through
+symlinks. Protect the key with appropriate Windows filesystem permissions and
+never commit either file. This step does not create, provision, install, or
+renew production certificates. Invalid configuration or TLS material prevents
+startup rather than falling back to HTTP. `SELENE_COMPANION_HTTPS` accepts only
+`1` (HTTPS), `0` or unset/empty (HTTP). TLS paths are forbidden in HTTP mode.
+
+To make only the Companion API reachable from trusted local devices, also set
+the explicit LAN flag:
 
     $env:SELENE_COMPANION_LAN = "1"
     npm start
 
-LAN mode binds Companion to `0.0.0.0:8787`. Clients must connect to the host
-computer's LAN address or hostname, such as `http://NOVA:8787/health`; they
-must not use `0.0.0.0` as the destination.
+LAN mode binds Companion to `0.0.0.0:8787` with the selected protocol. Clients
+must connect to NOVA's actual hostname or address, not `0.0.0.0`. HTTPS clients
+must trust the issuing CA and use a hostname or IP address present in the
+certificate's subject alternative names. The privileged Core server remains
+loopback-only at `127.0.0.1:3030`.
 
-Companion LAN access is unauthenticated and uses plaintext HTTP. Enable it only
-on a trusted private network, and scope any external Windows Firewall rule to
+Companion access is still unauthenticated. Legacy plaintext HTTP LAN mode
+remains temporarily available for compatibility, but Gateway bearer credentials
+must **never** be transmitted over plaintext HTTP. Do not configure clients to
+disable certificate validation. Scope any external Windows Firewall rule to
 TCP port `8787` on the Private profile and trusted local devices. Do not expose
 ports `3030` or `1234`, and do not configure router port forwarding.
 

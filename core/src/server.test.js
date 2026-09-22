@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { createCoreServer, startCoreServer } from "./server.js";
+import { createCoreServer, startCoreServer, startSeleneServers } from "./server.js";
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -41,6 +41,83 @@ test("Core server remains loopback-only when Companion LAN mode is enabled", asy
     } else {
       process.env.SELENE_COMPANION_LAN = previous;
     }
+  }
+});
+
+test("Core remains loopback-only when Companion HTTPS and LAN flags are set", async () => {
+  const previousHttps = process.env.SELENE_COMPANION_HTTPS;
+  const previousLan = process.env.SELENE_COMPANION_LAN;
+  process.env.SELENE_COMPANION_HTTPS = "1";
+  process.env.SELENE_COMPANION_LAN = "1";
+  const server = startCoreServer({ port: 0, onListening() {} });
+  try {
+    await new Promise((resolveListening, rejectListening) => {
+      server.once("listening", resolveListening);
+      server.once("error", rejectListening);
+    });
+    assert.equal(server.address().address, "127.0.0.1");
+  } finally {
+    if (server.listening) await close(server);
+    if (previousHttps === undefined) delete process.env.SELENE_COMPANION_HTTPS;
+    else process.env.SELENE_COMPANION_HTTPS = previousHttps;
+    if (previousLan === undefined) delete process.env.SELENE_COMPANION_LAN;
+    else process.env.SELENE_COMPANION_LAN = previousLan;
+  }
+});
+
+test("invalid Companion configuration prevents every listener from opening", async () => {
+  const messages = [];
+  await assert.rejects(startSeleneServers({
+    env: { SELENE_COMPANION_HTTPS: "1" },
+    corePort: 0,
+    companionPort: 0,
+    onCoreListening(message) { messages.push(message); },
+    onCompanionListening(message) { messages.push(message); },
+  }), /HTTPS requires both/);
+  assert.deepEqual(messages, []);
+});
+
+test("Core bind failure closes an already-open Companion listener", async () => {
+  const occupied = http.createServer((_request, response) => response.end());
+  const occupiedPort = await listen(occupied);
+  let companionPort;
+  try {
+    await assert.rejects(startSeleneServers({
+      env: {},
+      corePort: occupiedPort,
+      companionPort: 0,
+      onCompanionListening(message) {
+        companionPort = Number(message.match(/:(\d+) \(loopback only\)/)?.[1]);
+      },
+      onCoreListening() {},
+    }), { code: "EADDRINUSE" });
+    assert.ok(Number.isInteger(companionPort));
+    await assert.rejects(new Promise((resolveRequest, rejectRequest) => {
+      const req = http.get(`http://127.0.0.1:${companionPort}/health`, resolveRequest);
+      req.on("error", rejectRequest);
+    }), { code: "ECONNREFUSED" });
+  } finally {
+    await close(occupied);
+  }
+});
+
+test("Companion bind failure does not open the Core listener", async () => {
+  const occupied = http.createServer((_request, response) => response.end());
+  const occupiedPort = await listen(occupied);
+  const coreMessages = [];
+  const companionErrors = [];
+  try {
+    await assert.rejects(startSeleneServers({
+      env: {},
+      corePort: 0,
+      companionPort: occupiedPort,
+      onCoreListening(message) { coreMessages.push(message); },
+      onCompanionError(message) { companionErrors.push(message); },
+    }), /Companion API failed to start/);
+    assert.deepEqual(coreMessages, []);
+    assert.match(companionErrors[0], /port is already in use/);
+  } finally {
+    await close(occupied);
   }
 });
 

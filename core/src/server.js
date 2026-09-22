@@ -625,23 +625,59 @@ function stopRuntimeServices() {
   awarenessService.stop();
 }
 
+export async function startSeleneServers({
+  env = process.env,
+  corePort = PORT,
+  companionPort,
+  onCoreListening = console.log,
+  onCompanionListening = console.log,
+  onCompanionError = console.error,
+} = {}) {
+  const companionServer = await startCompanionServer({
+    port: companionPort,
+    env,
+    onListening: onCompanionListening,
+    onError: onCompanionError,
+  });
+  if (!companionServer) {
+    throw new Error("Selene Companion API failed to start.");
+  }
+
+  try {
+    const server = startCoreServer({ port: corePort, onListening: onCoreListening });
+    await new Promise((resolveListening, rejectListening) => {
+      server.once("listening", resolveListening);
+      server.once("error", rejectListening);
+    });
+    return { server, companionServer };
+  } catch (error) {
+    await new Promise((done) => companionServer.close(done));
+    throw error;
+  }
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
-  const server = startCoreServer();
-  const companionServer = await startCompanionServer();
+  let listeners;
+  try {
+    listeners = await startSeleneServers();
+  } catch (error) {
+    console.error(`Selene startup failed: ${error.message}`);
+    process.exitCode = 1;
+  }
 
-  process.once("SIGINT", () => {
-    stopRuntimeServices();
-    if (companionServer) {
-      companionServer.close();
-    }
-    server.close(() => process.exit(0));
-  });
+  if (listeners) {
+    const { server, companionServer } = listeners;
 
-  process.once("SIGTERM", () => {
-    stopRuntimeServices();
-    if (companionServer) {
+    process.once("SIGINT", () => {
+      stopRuntimeServices();
       companionServer.close();
-    }
-    server.close(() => process.exit(0));
-  });
+      server.close(() => process.exit(0));
+    });
+
+    process.once("SIGTERM", () => {
+      stopRuntimeServices();
+      companionServer.close();
+      server.close(() => process.exit(0));
+    });
+  }
 }
