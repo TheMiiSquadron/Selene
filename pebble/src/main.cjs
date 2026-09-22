@@ -7,6 +7,7 @@ const {
   normalizeProactiveNotifications,
   shouldShowProactiveState,
 } = require("./shared/proactiveNotifications.cjs");
+const { createCoreLifecycle } = require("./coreLifecycle.cjs");
 
 const PEBBLE_WINDOW = { width: 72, height: 64 };
 const PANEL_WINDOW = { width: 360, minHeight: 152, maxHeight: 420 };
@@ -22,6 +23,8 @@ const NOVA_CORE_COMMAND_URL = "http://127.0.0.1:3030/command";
 const NOVA_CORE_BASE_URL = "http://127.0.0.1:3030";
 const SETUP_VERSION = 1;
 const TRAY_ASSET_DIR = path.join(__dirname, "..", "assets", "tray");
+const coreLifecycle = createCoreLifecycle({ coreBaseUrl: NOVA_CORE_BASE_URL });
+const LIFECYCLE_QUIT_TIMEOUT_MS = 2500;
 
 fs.mkdirSync(USER_DATA_DIR, { recursive: true });
 app.setPath("userData", USER_DATA_DIR);
@@ -32,6 +35,7 @@ let panelWindow;
 let setupWindow;
 let tray;
 let isQuitting = false;
+let lifecycleShutdownStarted = false;
 let panelReady = false;
 let cursorOnPebble = false;
 let requestedPebbleState = "idle";
@@ -372,22 +376,9 @@ function stopNotificationPolling() {
 }
 
 async function getCoreTrayStatus() {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 900);
-
-  try {
-    const response = await fetch(`${NOVA_CORE_BASE_URL}/status`, {
-      signal: controller.signal,
-    });
-    if (!response.ok) return "Offline";
-
-    const payload = await response.json().catch(() => null);
-    return payload?.ok === false ? "Offline" : "Online";
-  } catch {
-    return "Offline";
-  } finally {
-    clearTimeout(timeout);
-  }
+  const status = await coreLifecycle.checkAvailability();
+  if (!status.reachable) return "Offline";
+  return status.owned ? "Online (owned)" : "Online";
 }
 
 function setPebbleEnabled(enabled, { persist = true } = {}) {
@@ -1066,6 +1057,35 @@ app.whenReady().then(() => {
 
 app.on("before-quit", () => {
   isQuitting = true;
+});
+
+app.on("before-quit", (event) => {
+  if (lifecycleShutdownStarted) return;
+
+  event.preventDefault();
+  isQuitting = true;
+  lifecycleShutdownStarted = true;
+  const timeout = new Promise((resolve) => {
+    setTimeout(() => {
+      resolve({
+        state: "shutdown-timeout",
+        message: "Timed out while waiting for Pebble-owned Core shutdown during quit.",
+      });
+    }, LIFECYCLE_QUIT_TIMEOUT_MS);
+  });
+
+  void Promise.race([coreLifecycle.shutdownOwnedCore(), timeout])
+    .then((status) => {
+      if (!["no-owned-core", "owned-stopped"].includes(status?.state)) {
+        console.error(`Selene Core lifecycle cleanup incomplete: ${status?.message ?? "unknown failure"}`);
+      }
+    })
+    .catch((error) => {
+      console.error(`Selene Core lifecycle cleanup failed: ${error?.message ?? error}`);
+    })
+    .finally(() => {
+      app.quit();
+    });
 });
 
 app.on("window-all-closed", () => {
