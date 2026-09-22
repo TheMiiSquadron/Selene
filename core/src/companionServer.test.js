@@ -12,7 +12,7 @@ import {
   COMPANION_HOST,
   COMPANION_LAN_HOST,
   COMPANION_PORT,
-  createCompanionServer,
+  createCompanionServer as createCompanionServerUnderTest,
   resolveCompanionHost,
   startCompanionServer,
   prepareCompanionTransport,
@@ -26,6 +26,24 @@ import { startSeleneServers } from "./server.js";
 
 const TEST_CHAT_REPLY = "A conversational reply.";
 const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const TEST_TLS = makeTestCertificate();
+const testTlsPorts = new Map();
+const TEST_BEARER = "test-gateway-credential";
+const testCredentialStore = {
+  authenticateCredential(value) {
+    if (value !== TEST_BEARER) throw new Error("Invalid test credential.");
+    return { capabilities: ["chat"] };
+  },
+};
+
+function createCompanionServer(options = {}) {
+  const tlsOptions = options.tlsOptions ?? TEST_TLS;
+  const server = createCompanionServerUnderTest({
+    credentialStore: testCredentialStore, tlsOptions, ...options,
+  });
+  server.testCertificate = tlsOptions.cert;
+  return server;
+}
 
 function createTestCompanionServer(options = {}) {
   const modelService = {
@@ -45,12 +63,17 @@ function createTestCompanionServer(options = {}) {
 function listen(server) {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(0, COMPANION_HOST, () => resolve(server.address().port));
+    server.listen(0, COMPANION_HOST, () => {
+      const port = server.address().port;
+      if (server.testCertificate) testTlsPorts.set(port, server.testCertificate);
+      resolve(port);
+    });
   });
 }
 
 function close(server) {
   return new Promise((resolve) => {
+    if (server.address()) testTlsPorts.delete(server.address().port);
     server.close(() => resolve());
   });
 }
@@ -131,7 +154,11 @@ test("Companion health and chat endpoints work while bound for LAN access", asyn
   const server = createTestCompanionServer({ host: COMPANION_LAN_HOST });
   const port = await new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(0, COMPANION_LAN_HOST, () => resolve(server.address().port));
+    server.listen(0, COMPANION_LAN_HOST, () => {
+      const port = server.address().port;
+      testTlsPorts.set(port, server.testCertificate);
+      resolve(port);
+    });
   });
 
   try {
@@ -178,6 +205,8 @@ function request({
         ? body
         : JSON.stringify(body);
     const requestHeaders = {
+      ...(method === "POST" && path === "/api/chat"
+        ? { Authorization: `Bearer ${TEST_BEARER}` } : {}),
       ...headers,
       ...(origin ? { Origin: origin } : {}),
     };
@@ -186,8 +215,11 @@ function request({
       requestHeaders["Content-Length"] = Buffer.byteLength(requestBody);
     }
 
-    const req = http.request({
+    const transport = testTlsPorts.has(port) ? https : http;
+    const req = transport.request({
       host: COMPANION_HOST,
+      ...(testTlsPorts.has(port)
+        ? { servername: "localhost", ca: testTlsPorts.get(port) } : {}),
       port,
       method,
       path,
@@ -225,9 +257,7 @@ test("Companion health endpoint returns Selene Core status", async () => {
 
     assert.equal(response.statusCode, 200);
     assert.equal(body.ok, true);
-    assert.equal(body.name, "Selene Core");
-    assert.equal(body.machine, "NOVA");
-    assert.match(body.version, /^\d+\.\d+\.\d+$/);
+    assert.deepEqual(body, { ok: true });
   } finally {
     await close(server);
   }
@@ -639,7 +669,7 @@ test("Companion chat OPTIONS preflight supports JSON POST", async () => {
       "http://127.0.0.1:8080",
     );
     assert.equal(response.headers["access-control-allow-methods"], "GET, POST, OPTIONS");
-    assert.equal(response.headers["access-control-allow-headers"], "Content-Type, Accept");
+    assert.equal(response.headers["access-control-allow-headers"], "Content-Type, Accept, Authorization");
   } finally {
     await close(server);
   }
@@ -748,6 +778,8 @@ function secureRequest({ port, cert, method = "GET", path = "/health", body, ori
   return new Promise((resolveRequest, rejectRequest) => {
     const requestBody = body === undefined ? null : JSON.stringify(body);
     const headers = {
+      ...(method === "POST" && path === "/api/chat"
+        ? { Authorization: `Bearer ${TEST_BEARER}` } : {}),
       ...(origin ? { Origin: origin } : {}),
       ...(requestBody === null ? {} : {
         "Content-Type": "application/json",
@@ -894,6 +926,7 @@ test("HTTPS and HTTP share route behavior, with no HTTP fallback", async () => {
   const messages = [];
   const server = await startCompanionServer({
     port: 0,
+    credentialStore: testCredentialStore,
     env: {
       SELENE_COMPANION_HTTPS: "1",
       SELENE_COMPANION_TLS_CERT_PATH: fixture.certPath,

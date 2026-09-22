@@ -38,6 +38,7 @@ import {
 } from "./notifications.js";
 import { awarenessService } from "./awareness.js";
 import { startCompanionServer } from "./companionServer.js";
+import { createGatewayCredentialStore } from "./gatewayCredentialStore.js";
 
 const HOST = "127.0.0.1";
 const PORT = 3030;
@@ -632,12 +633,14 @@ export async function startSeleneServers({
   onCoreListening = console.log,
   onCompanionListening = console.log,
   onCompanionError = console.error,
+  credentialStore = null,
 } = {}) {
   const companionServer = await startCompanionServer({
     port: companionPort,
     env,
     onListening: onCompanionListening,
     onError: onCompanionError,
+    credentialStore,
   });
   if (!companionServer) {
     throw new Error("Selene Companion API failed to start.");
@@ -658,26 +661,28 @@ export async function startSeleneServers({
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   let listeners;
+  let credentialStore;
   try {
-    listeners = await startSeleneServers();
+    credentialStore = createGatewayCredentialStore();
+    listeners = await startSeleneServers({ credentialStore });
   } catch (error) {
+    credentialStore?.close();
     console.error(`Selene startup failed: ${error.message}`);
     process.exitCode = 1;
   }
 
   if (listeners) {
     const { server, companionServer } = listeners;
-
-    process.once("SIGINT", () => {
+    const shutdown = async () => {
       stopRuntimeServices();
-      companionServer.close();
-      server.close(() => process.exit(0));
-    });
-
-    process.once("SIGTERM", () => {
-      stopRuntimeServices();
-      companionServer.close();
-      server.close(() => process.exit(0));
-    });
+      await Promise.all([
+        new Promise((done) => companionServer.close(done)),
+        new Promise((done) => server.close(done)),
+      ]);
+      credentialStore.close();
+      process.exit(0);
+    };
+    process.once("SIGINT", shutdown);
+    process.once("SIGTERM", shutdown);
   }
 }

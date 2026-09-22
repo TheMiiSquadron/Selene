@@ -2,7 +2,6 @@ import http from "node:http";
 import https from "node:https";
 import { createSecureContext } from "node:tls";
 import { readFileSync, realpathSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -15,7 +14,6 @@ export const COMPANION_LAN_HOST = "0.0.0.0";
 export const COMPANION_PORT = 8787;
 export const COMPANION_MAX_BODY_BYTES = 32 * 1024;
 
-const PACKAGE_URL = new URL("../package.json", import.meta.url);
 const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const ALLOWED_ORIGINS = new Set([
   "http://localhost:8080",
@@ -118,15 +116,6 @@ function companionListeningMessage(host, port, scheme) {
   return `Selene Companion API listening on ${scheme}://${host}:${port} (custom bind).`;
 }
 
-async function getCoreVersion() {
-  try {
-    const pkg = JSON.parse(await readFile(PACKAGE_URL, "utf-8"));
-    return String(pkg.version ?? "unknown");
-  } catch {
-    return "unknown";
-  }
-}
-
 function corsHeaders(request) {
   const origin = request.headers.origin;
 
@@ -137,7 +126,7 @@ function corsHeaders(request) {
   return {
       "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Accept",
+    "Access-Control-Allow-Headers": "Content-Type, Accept, Authorization",
     "Vary": "Origin",
   };
 }
@@ -168,6 +157,44 @@ function sendError(request, response, statusCode, code, message) {
       message,
     },
   });
+}
+
+function bearerCredential(request) {
+  const headers = request.rawHeaders ?? [];
+  const values = [];
+  for (let index = 0; index < headers.length; index += 2) {
+    if (headers[index]?.toLowerCase() === "authorization") {
+      values.push(headers[index + 1]);
+    }
+  }
+  if (values.length !== 1 || typeof values[0] !== "string") return null;
+  const match = /^Bearer ([A-Za-z0-9._-]+)$/i.exec(values[0]);
+  return match?.[1] ?? null;
+}
+
+function authorizeChat(request, response, credentialStore) {
+  const credential = bearerCredential(request);
+  if (!credential) {
+    sendError(request, response, 401, "UNAUTHORIZED", "Authentication required.");
+    return false;
+  }
+  try {
+    if (typeof credentialStore?.authenticateCredential !== "function") {
+      throw new Error("Gateway credential store unavailable.");
+    }
+    const identity = credentialStore.authenticateCredential(credential);
+    if (!identity || !Array.isArray(identity.capabilities)) {
+      throw new Error("Invalid Gateway identity.");
+    }
+    if (!identity.capabilities.includes("chat")) {
+      sendError(request, response, 403, "FORBIDDEN", "Chat access denied.");
+      return false;
+    }
+    return true;
+  } catch {
+    sendError(request, response, 401, "UNAUTHORIZED", "Authentication required.");
+    return false;
+  }
 }
 
 function isJsonContentType(request) {
@@ -271,6 +298,7 @@ export function createCompanionServer({
   machine = "NOVA",
   name = "Selene Core",
   chatHandler = handleCompanionChat,
+  credentialStore = null,
   tlsOptions = null,
 } = {}) {
   const handler = async (request, response) => {
@@ -282,16 +310,16 @@ export function createCompanionServer({
     }
 
     if (request.method === "GET" && url.pathname === "/health") {
-      sendJson(request, response, 200, {
-        ok: true,
-        name,
-        machine,
-        version: await getCoreVersion(),
-      });
+      sendJson(request, response, 200, { ok: true });
       return;
     }
 
     if (request.method === "POST" && url.pathname === "/api/chat") {
+      if (!request.socket.encrypted) {
+        sendError(request, response, 426, "HTTPS_REQUIRED", "HTTPS is required.");
+        return;
+      }
+      if (!authorizeChat(request, response, credentialStore)) return;
       await handleChat(request, response, chatHandler);
       return;
     }
@@ -324,6 +352,7 @@ export function startCompanionServer({
   env = process.env,
   onListening = console.log,
   onError = console.error,
+  credentialStore = null,
   transport,
 } = {}) {
   if (transport !== undefined) {
@@ -338,6 +367,7 @@ export function startCompanionServer({
     host: bindHost,
     port,
     tlsOptions: configuration.tlsOptions,
+    credentialStore,
   });
 
   return new Promise((resolve) => {
