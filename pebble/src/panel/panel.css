@@ -711,6 +711,205 @@ body {
 }
 
 /* =========================================================
+   PAIRING CARD
+   ========================================================= */
+
+.pairing-card {
+  margin-top: 10px;
+
+  padding: 11px;
+
+  border:
+    1px solid
+    rgba(111, 168, 255, 0.18);
+
+  border-radius: 13px;
+
+  background:
+    radial-gradient(
+      circle at 14% 0%,
+      rgba(111, 168, 255, 0.11),
+      transparent 45%
+    ),
+    rgba(255, 255, 255, 0.035);
+
+  box-shadow:
+    inset
+    0
+    1px
+    0
+    rgba(255, 255, 255, 0.035);
+}
+
+.pairing-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 10px;
+}
+
+.pairing-header h2 {
+  margin: 0;
+
+  color: var(--text);
+
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.pairing-header p {
+  margin:
+    4px
+    0
+    0;
+
+  color: var(--text-muted);
+
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.pairing-badge {
+  flex: 0 0 auto;
+
+  padding:
+    3px
+    6px;
+
+  border:
+    1px solid
+    rgba(111, 168, 255, 0.24);
+
+  border-radius: 999px;
+
+  background:
+    rgba(111, 168, 255, 0.09);
+
+  color: var(--blue);
+
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 600;
+
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.pairing-secret-wrap {
+  margin-top: 9px;
+
+  display: grid;
+
+  gap: 5px;
+}
+
+.pairing-secret-wrap[hidden] {
+  display: none !important;
+}
+
+.pairing-secret-label,
+#pairing-expiration {
+  color: var(--text-faint);
+
+  font-family: var(--mono);
+  font-size: 7.5px;
+
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+#pairing-secret {
+  display: block;
+
+  padding:
+    8px
+    9px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.10);
+
+  border-radius: 10px;
+
+  background:
+    rgba(0, 0, 0, 0.22);
+
+  color:
+    rgba(255, 255, 255, 0.95);
+
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.45;
+
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.pairing-actions {
+  margin-top: 10px;
+
+  display: grid;
+
+  grid-template-columns:
+    1fr
+    1fr;
+
+  gap: 6px;
+}
+
+.pairing-button {
+  min-height: 30px;
+
+  padding:
+    5px
+    8px;
+
+  border:
+    1px solid
+    var(--border);
+
+  border-radius: 10px;
+
+  background:
+    rgba(255, 255, 255, 0.055);
+
+  color: var(--text);
+
+  cursor: pointer;
+
+  font-family: var(--sans);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.pairing-button:hover:not(:disabled) {
+  background:
+    var(--surface-hover);
+}
+
+.pairing-button--primary {
+  border-color:
+    rgba(111, 168, 255, 0.30);
+
+  background:
+    rgba(111, 168, 255, 0.12);
+
+  color: #a9c9ff;
+}
+
+.pairing-button--primary:hover:not(:disabled) {
+  background:
+    rgba(111, 168, 255, 0.17);
+}
+
+.pairing-button:disabled {
+  opacity: 0.42;
+
+  cursor: default;
+}
+
+/* =========================================================
    COMPOSER
    ========================================================= */
 

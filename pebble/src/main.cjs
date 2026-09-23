@@ -8,6 +8,7 @@ const {
   shouldShowProactiveState,
 } = require("./shared/proactiveNotifications.cjs");
 const { createCoreLifecycle } = require("./coreLifecycle.cjs");
+const { registerPairingIpcHandlers } = require("./pairingIpc.cjs");
 
 const PEBBLE_WINDOW = { width: 72, height: 64 };
 const PANEL_WINDOW = { width: 360, minHeight: 152, maxHeight: 420 };
@@ -731,6 +732,14 @@ function togglePanel() {
   }
 }
 
+function isPanelIpcSender(event) {
+  return Boolean(
+    panelWindow
+    && !panelWindow.isDestroyed()
+    && event?.sender === panelWindow.webContents
+  );
+}
+
 ipcMain.handle("nova-pebble:toggle-panel", () => {
   togglePanel();
 });
@@ -829,6 +838,12 @@ ipcMain.handle("nova-panel:elevate-authority", async (_event, request) => {
 
 ipcMain.handle("nova-panel:acknowledge-notification", async (_event, id) => {
   return acknowledgeCoreNotification(id);
+});
+
+registerPairingIpcHandlers({
+  ipcMain,
+  coreLifecycle,
+  isAllowedSender: isPanelIpcSender,
 });
 
 ipcMain.handle("nova-setup:get-initial-state", async () => {

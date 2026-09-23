@@ -518,6 +518,74 @@ test("owned shutdown closes admin channel without changing responder ownership s
   assert.equal(child.killed, true);
 });
 
+test("pairing admin methods fail closed without a ready authenticated admin channel", async () => {
+  const lifecycle = createCoreLifecycle({
+    fetchImpl: async () => okResponse(),
+    launchConfiguration: null,
+  });
+
+  await assert.rejects(lifecycle.getPairingStatus(), /not ready/i);
+  await assert.rejects(lifecycle.startPairing(), /not ready/i);
+  await assert.rejects(lifecycle.cancelPairing(), /not ready/i);
+  assert.equal(lifecycle.getAdminChannelStatus().ready, false);
+});
+
+test("pairing admin methods unwrap authenticated channel payloads only for owned Core", async () => {
+  let spawned = false;
+  const payloads = {
+    status: { ok: true, session: null },
+    start: {
+      ok: true,
+      pairingSecret: "S".repeat(43),
+      session: {
+        id: "session-1",
+        createdAt: "2026-09-23T00:00:00.000Z",
+        expiresAt: "2026-09-23T00:05:00.000Z",
+        failedAttempts: 0,
+        failedAttemptsRemaining: 5,
+      },
+    },
+    cancel: { ok: true, cancelled: true, status: { ok: true, session: null } },
+  };
+  const lifecycle = createCoreLifecycle({
+    fetchImpl: async () => {
+      if (spawned) return okResponse();
+      throw new Error("offline");
+    },
+    spawnImpl: () => {
+      spawned = true;
+      return new FakeChild({ pid: 7101 });
+    },
+    createCoreAdminChannel: () => ({
+      getStatus() {
+        return { state: "ready", ready: true };
+      },
+      close() {},
+      async getPairingStatus() {
+        return { payload: payloads.status };
+      },
+      async startPairing() {
+        return { payload: payloads.start };
+      },
+      async cancelPairing() {
+        return { payload: payloads.cancel };
+      },
+    }),
+    launchConfiguration: {
+      executable: path.resolve("C:/trusted/node.exe"),
+      args: [path.resolve("C:/trusted/Selene/core/src/server.js")],
+      cwd: path.resolve("C:/trusted/Selene/core/src"),
+    },
+  });
+
+  await lifecycle.startOwnedCore({ enableAdminChannel: true });
+
+  assert.deepEqual(await lifecycle.getPairingStatus(), payloads.status);
+  assert.deepEqual(await lifecycle.startPairing(), payloads.start);
+  assert.deepEqual(await lifecycle.cancelPairing(), payloads.cancel);
+  assert.doesNotMatch(JSON.stringify(lifecycle.getOwnershipSnapshot()), /SSSS/);
+});
+
 test("rejects relative owned-launch paths", () => {
   assert.throws(
     () => resolveLaunchConfiguration({ nodeExecutable: "node.exe" }),

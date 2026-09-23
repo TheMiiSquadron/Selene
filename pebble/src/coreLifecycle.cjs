@@ -443,11 +443,48 @@ function createCoreLifecycle({
     });
   }
 
+  function getAdminChannelStatus() {
+    return adminChannel?.getStatus?.() ?? {
+      state: "unavailable",
+      ready: false,
+    };
+  }
+
+  function ensureReadyAdminChannel() {
+    const status = getAdminChannelStatus();
+    if (status.ready !== true || !adminChannel) {
+      const error = new Error("Pebble-owned Core admin channel is not ready.");
+      error.code = "ADMIN_CHANNEL_UNAVAILABLE";
+      error.adminChannel = status;
+      throw error;
+    }
+    return adminChannel;
+  }
+
+  async function getPairingStatus() {
+    const result = await ensureReadyAdminChannel().getPairingStatus();
+    return result.payload;
+  }
+
+  async function startPairing() {
+    const result = await ensureReadyAdminChannel().startPairing();
+    return result.payload;
+  }
+
+  async function cancelPairing() {
+    const result = await ensureReadyAdminChannel().cancelPairing();
+    return result.payload;
+  }
+
   return Object.freeze({
     checkAvailability,
     startOwnedCore,
     shutdownOwnedCore,
     getOwnershipSnapshot,
+    getAdminChannelStatus,
+    getPairingStatus,
+    startPairing,
+    cancelPairing,
   });
 }
 

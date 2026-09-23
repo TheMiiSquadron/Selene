@@ -72,6 +72,56 @@
           class="approval-card"
           hidden
         ></div>
+
+        <section
+          id="pairing-card"
+          class="pairing-card"
+          aria-label="Device pairing"
+        >
+          <div class="pairing-header">
+            <div>
+              <h2>Device pairing</h2>
+              <p id="pairing-message">Checking secure pairing…</p>
+            </div>
+
+            <span
+              id="pairing-badge"
+              class="pairing-badge"
+            >
+              Unavailable
+            </span>
+          </div>
+
+          <div
+            id="pairing-secret-wrap"
+            class="pairing-secret-wrap"
+            hidden
+          >
+            <span class="pairing-secret-label">Temporary secret</span>
+            <code id="pairing-secret"></code>
+            <span id="pairing-expiration"></span>
+          </div>
+
+          <div class="pairing-actions">
+            <button
+              type="button"
+              id="pairing-start"
+              class="pairing-button pairing-button--primary"
+              disabled
+            >
+              Pair a Device
+            </button>
+
+            <button
+              type="button"
+              id="pairing-cancel"
+              class="pairing-button"
+              disabled
+            >
+              Cancel Pairing
+            </button>
+          </div>
+        </section>
       </section>
 
       <div
@@ -103,6 +153,7 @@
       </div>
     </main>
 
+    <script src="../shared/pairingPanelState.cjs"></script>
     <script src="./panel.js"></script>
   </body>
 </html>

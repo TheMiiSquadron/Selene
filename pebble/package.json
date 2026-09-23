@@ -7,8 +7,8 @@
   "scripts": {
     "start": "node scripts/start-electron.cjs",
     "setup": "node scripts/start-electron.cjs --setup",
-    "test": "node --test src/coreAdminChannel.test.cjs src/coreLifecycle.test.cjs src/shared/proactiveNotifications.test.cjs",
-    "check": "node --check src/main.cjs && node --check src/preload.cjs && node --check src/coreAdminChannel.cjs && node --check src/coreAdminChannel.test.cjs && node --check src/coreLifecycle.cjs && node --check src/coreLifecycle.test.cjs && node --check src/shared/pebbleStates.cjs && node --check src/shared/proactiveNotifications.cjs && node --check src/renderer/pebble.js && node --check src/panel/panel.js && node --check src/setup/setup.js && node --check scripts/start-electron.cjs && npm test"
+    "test": "node --test src/coreAdminChannel.test.cjs src/coreLifecycle.test.cjs src/pairingIpc.test.cjs src/shared/pairingPanelState.test.cjs src/shared/proactiveNotifications.test.cjs",
+    "check": "node --check src/main.cjs && node --check src/preload.cjs && node --check src/coreAdminChannel.cjs && node --check src/coreAdminChannel.test.cjs && node --check src/coreLifecycle.cjs && node --check src/coreLifecycle.test.cjs && node --check src/pairingIpc.cjs && node --check src/pairingIpc.test.cjs && node --check src/shared/pebbleStates.cjs && node --check src/shared/pairingPanelState.cjs && node --check src/shared/pairingPanelState.test.cjs && node --check src/shared/proactiveNotifications.cjs && node --check src/renderer/pebble.js && node --check src/panel/panel.js && node --check src/setup/setup.js && node --check scripts/start-electron.cjs && npm test"
   },
   "devDependencies": {
     "electron": "43.4.1"

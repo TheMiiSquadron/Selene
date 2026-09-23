@@ -6,6 +6,14 @@ const sendButton = document.querySelector("#send-command");
 const closeButton = document.querySelector("#close-panel");
 const responseMessage = document.querySelector("#response-message");
 const approvalCard = document.querySelector("#approval-card");
+const pairingCard = document.querySelector("#pairing-card");
+const pairingMessage = document.querySelector("#pairing-message");
+const pairingBadge = document.querySelector("#pairing-badge");
+const pairingSecretWrap = document.querySelector("#pairing-secret-wrap");
+const pairingSecretText = document.querySelector("#pairing-secret");
+const pairingExpiration = document.querySelector("#pairing-expiration");
+const pairingStartButton = document.querySelector("#pairing-start");
+const pairingCancelButton = document.querySelector("#pairing-cancel");
 const stateSwitcher = document.querySelector("#state-switcher");
 const statusText = document.querySelector("#panel-status-text");
 
@@ -32,12 +40,17 @@ let lastRequestedHeight = -1;
 let stateButtons = [];
 let pendingApproval = null;
 let approvalBusy = false;
+let pairingState = window.SelenePairingPanelState.createInitialPairingState();
+let pairingCountdownTimer = 0;
+let pairingRefreshTimer = 0;
+let pairingBusy = false;
 const displayedProactiveNotifications = new Set();
 const ACTIVE_STATES = new Set([
   "working",
   "asking",
   "error",
 ]);
+const PAIRING_REFRESH_MS = 15000;
 
 
 /* ============================================================
@@ -1009,6 +1022,9 @@ function markOpen() {
     "panel--open",
   );
 
+  startPairingTimers();
+  void refreshPairingStatus();
+
   /*
    * Force a fresh intrinsic measurement on every open.
    */
@@ -1060,7 +1076,254 @@ async function handleProactiveNotifications(notifications) {
 }
 
 
+/* ============================================================
+   Pairing UI
+   ============================================================ */
+
+function setPairingState(nextState) {
+  pairingState = nextState;
+  renderPairingCard();
+}
+
+function formatPairingTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+
+  return date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function pairingSecondsRemaining() {
+  const expiresAtMs = pairingState.session?.expiresAtMs;
+  if (!Number.isFinite(expiresAtMs)) return null;
+  return Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000));
+}
+
+function renderPairingCard() {
+  if (!pairingCard) return;
+
+  const hasSecret = typeof pairingState.pairingSecret === "string"
+    && pairingState.pairingSecret.length > 0
+    && pairingState.phase === "active";
+  const canStart = pairingState.availability === "available"
+    && !pairingBusy
+    && pairingState.phase !== "active";
+  const canCancel = pairingState.availability === "available"
+    && !pairingBusy
+    && pairingState.phase === "active";
+
+  if (pairingMessage) {
+    const remaining = pairingSecondsRemaining();
+    pairingMessage.textContent = remaining !== null && pairingState.phase === "active"
+      ? `${pairingState.message} Expires in ${remaining}s.`
+      : pairingState.message;
+  }
+
+  if (pairingBadge) {
+    pairingBadge.textContent = ({
+      unavailable: "Unavailable",
+      ready: "Ready",
+      active: "Active",
+      expired: "Expired",
+      error: "Check",
+    })[pairingState.phase] ?? "Unavailable";
+  }
+
+  if (pairingSecretWrap) {
+    pairingSecretWrap.hidden = !hasSecret;
+  }
+
+  if (pairingSecretText) {
+    pairingSecretText.textContent = hasSecret
+      ? pairingState.pairingSecret
+      : "";
+  }
+
+  if (pairingExpiration) {
+    const expiration = formatPairingTime(pairingState.session?.expiresAt);
+    pairingExpiration.textContent = expiration
+      ? `Expires at ${expiration}`
+      : "";
+  }
+
+  if (pairingStartButton) {
+    pairingStartButton.disabled = !canStart;
+  }
+
+  if (pairingCancelButton) {
+    pairingCancelButton.disabled = !canCancel;
+  }
+
+  requestPanelResize();
+}
+
+function clearDisplayedPairingSecret(message = pairingState.message) {
+  setPairingState(
+    window.SelenePairingPanelState.clearSecret(
+      pairingState,
+      message,
+    ),
+  );
+}
+
+function stopPairingTimers() {
+  if (pairingCountdownTimer) {
+    window.clearInterval(pairingCountdownTimer);
+    pairingCountdownTimer = 0;
+  }
+
+  if (pairingRefreshTimer) {
+    window.clearInterval(pairingRefreshTimer);
+    pairingRefreshTimer = 0;
+  }
+}
+
+function updatePairingExpiration() {
+  const nextState =
+    window.SelenePairingPanelState.expireIfNeeded(
+      pairingState,
+      Date.now(),
+    );
+
+  if (nextState !== pairingState) {
+    setPairingState(nextState);
+    return;
+  }
+
+  renderPairingCard();
+}
+
+async function refreshPairingStatus() {
+  try {
+    const response =
+      await window.novaPanel.getPairingStatus();
+    setPairingState(
+      window.SelenePairingPanelState.applyStatus(
+        pairingState,
+        response,
+        Date.now(),
+      ),
+    );
+  } catch {
+    setPairingState(
+      window.SelenePairingPanelState.applyUnavailable(
+        pairingState,
+        "Secure pairing status is unavailable.",
+      ),
+    );
+  }
+}
+
+function startPairingTimers() {
+  if (!pairingCountdownTimer) {
+    pairingCountdownTimer = window.setInterval(
+      updatePairingExpiration,
+      1000,
+    );
+  }
+
+  if (!pairingRefreshTimer) {
+    pairingRefreshTimer = window.setInterval(
+      () => {
+        void refreshPairingStatus();
+      },
+      PAIRING_REFRESH_MS,
+    );
+  }
+}
+
+async function startPairingFromUi() {
+  if (pairingBusy) return;
+
+  pairingBusy = true;
+  setPairingState(
+    window.SelenePairingPanelState.withBusy(
+      pairingState,
+      true,
+    ),
+  );
+
+  try {
+    const response =
+      await window.novaPanel.startPairing();
+    setPairingState(
+      window.SelenePairingPanelState.applyStartResult(
+        pairingState,
+        response,
+        Date.now(),
+      ),
+    );
+  } catch {
+    setPairingState(
+      window.SelenePairingPanelState.applyUnavailable(
+        pairingState,
+        "Pairing could not be started.",
+      ),
+    );
+  } finally {
+    pairingBusy = false;
+    setPairingState(
+      window.SelenePairingPanelState.withBusy(
+        pairingState,
+        false,
+      ),
+    );
+  }
+}
+
+async function cancelPairingFromUi() {
+  if (pairingBusy) return;
+
+  pairingBusy = true;
+  clearDisplayedPairingSecret("Cancelling pairing…");
+  setPairingState(
+    window.SelenePairingPanelState.withBusy(
+      pairingState,
+      true,
+    ),
+  );
+
+  try {
+    const response =
+      await window.novaPanel.cancelPairing();
+    setPairingState(
+      window.SelenePairingPanelState.applyCancelResult(
+        pairingState,
+        response,
+      ),
+    );
+  } catch {
+    setPairingState(
+      window.SelenePairingPanelState.applyCancelResult(
+        pairingState,
+        {
+          ok: false,
+          message: "Secure Core pairing cancellation could not be confirmed.",
+        },
+      ),
+    );
+  } finally {
+    pairingBusy = false;
+    setPairingState(
+      window.SelenePairingPanelState.withBusy(
+        pairingState,
+        false,
+      ),
+    );
+  }
+}
+
+
 function markClosing() {
+  stopPairingTimers();
+  clearDisplayedPairingSecret(
+    "Pairing display cleared.",
+  );
+
   panel.classList.remove(
     "panel--open",
   );
@@ -1165,6 +1428,31 @@ approvalCard.addEventListener(
       default:
         break;
     }
+  },
+);
+
+
+pairingStartButton?.addEventListener(
+  "click",
+  () => {
+    void startPairingFromUi();
+  },
+);
+
+
+pairingCancelButton?.addEventListener(
+  "click",
+  () => {
+    void cancelPairingFromUi();
+  },
+);
+
+
+window.addEventListener(
+  "beforeunload",
+  () => {
+    stopPairingTimers();
+    clearDisplayedPairingSecret();
   },
 );
 
@@ -1338,6 +1626,13 @@ if (approvalCard) {
 }
 
 
+if (pairingCard) {
+  resizeObserver.observe(
+    pairingCard,
+  );
+}
+
+
 /* ============================================================
    Start
    ============================================================ */
@@ -1345,6 +1640,8 @@ if (approvalCard) {
 renderStateControls();
 
 clearActivity();
+
+renderPairingCard();
 
 requestAnimationFrame(() => {
   resetResizeMeasurement();

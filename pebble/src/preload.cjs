@@ -59,6 +59,15 @@ contextBridge.exposeInMainWorld("novaPanel", {
   acknowledgeNotification(id) {
     return ipcRenderer.invoke("nova-panel:acknowledge-notification", String(id ?? ""));
   },
+  getPairingStatus() {
+    return ipcRenderer.invoke("nova-panel:pairing-status");
+  },
+  startPairing() {
+    return ipcRenderer.invoke("nova-panel:pairing-start");
+  },
+  cancelPairing() {
+    return ipcRenderer.invoke("nova-panel:pairing-cancel");
+  },
   resizeToContent(contentHeight) {
     return ipcRenderer.invoke("nova-panel:resize-to-content", Number(contentHeight));
   },
