@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const EventEmitter = require("node:events");
 const path = require("node:path");
 const {
+  OWNED_CORE_ADMIN_IPC_ARG,
   createCoreLifecycle,
   resolveLaunchConfiguration,
 } = require("./coreLifecycle.cjs");
@@ -401,6 +402,120 @@ test("reports launch unavailable when no trusted executable is configured", asyn
 
   assert.equal(status.state, "startup-failed");
   assert.equal(status.failure.reason, "OWNED_LAUNCH_UNCONFIGURED");
+});
+
+test("admin IPC owned launch uses fixed non-secret flag and inherited stdio only when explicitly enabled", async () => {
+  let child;
+  let spawned = false;
+  let adminFactoryCalls = 0;
+  const lifecycle = createCoreLifecycle({
+    fetchImpl: async () => {
+      if (spawned) return okResponse();
+      throw new Error("offline");
+    },
+    spawnImpl: (executable, args, options) => {
+      spawned = true;
+      child = new FakeChild({ pid: 7001 });
+      assert.equal(executable, path.resolve("C:/trusted/node.exe"));
+      assert.deepEqual(args, [
+        path.resolve("C:/trusted/Selene/core/src/server.js"),
+        OWNED_CORE_ADMIN_IPC_ARG,
+      ]);
+      assert.deepEqual(options.stdio, ["ignore", "ignore", "ignore", "pipe", "ipc"]);
+      assert.equal(Object.hasOwn(options, "env"), false);
+      assert.equal(JSON.stringify(args).includes("ERERER"), false);
+      return child;
+    },
+    createCoreAdminChannel: ({ child: adminChild }) => {
+      adminFactoryCalls += 1;
+      assert.equal(adminChild, child);
+      return {
+        close() {},
+        getStatus() {
+          return { state: "ready", ready: true };
+        },
+      };
+    },
+    launchConfiguration: {
+      executable: path.resolve("C:/trusted/node.exe"),
+      args: [path.resolve("C:/trusted/Selene/core/src/server.js")],
+      cwd: path.resolve("C:/trusted/Selene/core/src"),
+    },
+  });
+
+  const started = await lifecycle.startOwnedCore({ enableAdminChannel: true });
+  const snapshot = lifecycle.getOwnershipSnapshot();
+
+  assert.equal(started.state, "reachable-with-owned-child");
+  assert.equal(started.responderOwnership, "unverified");
+  assert.equal(adminFactoryCalls, 1);
+  assert.deepEqual(snapshot.adminChannel, { state: "ready", ready: true });
+});
+
+test("external Core does not receive an admin channel or capability", async () => {
+  let spawnCalls = 0;
+  let adminFactoryCalls = 0;
+  const lifecycle = createCoreLifecycle({
+    fetchImpl: async () => okResponse(),
+    spawnImpl: () => {
+      spawnCalls += 1;
+      return new FakeChild();
+    },
+    createCoreAdminChannel: () => {
+      adminFactoryCalls += 1;
+      throw new Error("should not create admin channel");
+    },
+    launchConfiguration: {
+      executable: path.resolve("C:/trusted/node.exe"),
+      args: [path.resolve("C:/trusted/Selene/core/src/server.js")],
+      cwd: path.resolve("C:/trusted/Selene/core/src"),
+    },
+  });
+
+  const status = await lifecycle.startOwnedCore({ enableAdminChannel: true });
+
+  assert.equal(status.state, "externally-managed");
+  assert.equal(spawnCalls, 0);
+  assert.equal(adminFactoryCalls, 0);
+  assert.equal(lifecycle.getOwnershipSnapshot().adminChannel.state, "unavailable");
+});
+
+test("owned shutdown closes admin channel without changing responder ownership semantics", async () => {
+  let child;
+  let spawned = false;
+  let adminClosed = false;
+  const lifecycle = createCoreLifecycle({
+    fetchImpl: async () => {
+      if (spawned) return okResponse();
+      throw new Error("offline");
+    },
+    spawnImpl: () => {
+      spawned = true;
+      child = new FakeChild({ pid: 7002 });
+      return child;
+    },
+    createCoreAdminChannel: () => ({
+      close() {
+        adminClosed = true;
+      },
+      getStatus() {
+        return { state: "ready", ready: true };
+      },
+    }),
+    launchConfiguration: {
+      executable: path.resolve("C:/trusted/node.exe"),
+      args: [path.resolve("C:/trusted/Selene/core/src/server.js")],
+      cwd: path.resolve("C:/trusted/Selene/core/src"),
+    },
+  });
+
+  const started = await lifecycle.startOwnedCore({ enableAdminChannel: true });
+  assert.equal(started.responderOwnership, "unverified");
+  const stopped = await lifecycle.shutdownOwnedCore();
+
+  assert.equal(stopped.state, "owned-stopped");
+  assert.equal(adminClosed, true);
+  assert.equal(child.killed, true);
 });
 
 test("rejects relative owned-launch paths", () => {

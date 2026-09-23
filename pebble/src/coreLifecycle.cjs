@@ -1,10 +1,12 @@
 const path = require("node:path");
 const { spawn: defaultSpawn } = require("node:child_process");
+const { createCoreAdminChannel: defaultCreateCoreAdminChannel } = require("./coreAdminChannel.cjs");
 
 const DEFAULT_STARTUP_TIMEOUT_MS = 5000;
 const DEFAULT_POLL_INTERVAL_MS = 100;
 const DEFAULT_CLEANUP_TIMEOUT_MS = 2000;
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 2000;
+const OWNED_CORE_ADMIN_IPC_ARG = "--selene-owned-core-admin-ipc";
 
 function delay(ms) {
   return new Promise((resolve) => {
@@ -15,6 +17,14 @@ function delay(ms) {
 function sanitizeMessage(error) {
   const message = String(error?.message ?? error ?? "").trim();
   return message || "Unknown error.";
+}
+
+function isPlainObject(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 function buildStatus({
@@ -67,6 +77,7 @@ function createCoreLifecycle({
   coreBaseUrl = "http://127.0.0.1:3030",
   fetchImpl = globalThis.fetch,
   spawnImpl = defaultSpawn,
+  createCoreAdminChannel = defaultCreateCoreAdminChannel,
   startupTimeoutMs = DEFAULT_STARTUP_TIMEOUT_MS,
   pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
   cleanupTimeoutMs = DEFAULT_CLEANUP_TIMEOUT_MS,
@@ -79,6 +90,7 @@ function createCoreLifecycle({
   let lastExit = null;
   let startInProgress = null;
   let shutdownInProgress = null;
+  let adminChannel = null;
 
   function hasOwnedChild() {
     return Boolean(ownedChild && ownedChild.exitCode === null && ownedChild.signalCode === null);
@@ -87,6 +99,8 @@ function createCoreLifecycle({
   function attachChildLifecycle(child, sourceOperation = "runtime") {
     child.once("exit", (code, signal) => {
       lastExit = { code, signal };
+      adminChannel?.close?.();
+      adminChannel = null;
       ownedChildStopping = false;
       if (ownedChild === child) {
         ownedChild = null;
@@ -94,6 +108,8 @@ function createCoreLifecycle({
     });
 
     child.once("error", (error) => {
+      adminChannel?.close?.();
+      adminChannel = null;
       lastFailure = {
         operation: sourceOperation,
         reason: sanitizeMessage(error),
@@ -281,6 +297,8 @@ function createCoreLifecycle({
   }
 
   async function startOwnedCore() {
+    const options = isPlainObject(arguments[0]) ? arguments[0] : {};
+    const enableAdminChannel = options.enableAdminChannel === true;
     if (startInProgress) return startInProgress;
 
     startInProgress = (async () => {
@@ -311,13 +329,18 @@ function createCoreLifecycle({
     }
 
     try {
+      const args = enableAdminChannel
+        ? [...launchConfiguration.args, OWNED_CORE_ADMIN_IPC_ARG]
+        : launchConfiguration.args;
       const child = spawnImpl(
         launchConfiguration.executable,
-        launchConfiguration.args,
+        args,
         {
           cwd: launchConfiguration.cwd,
           shell: false,
-          stdio: "ignore",
+          stdio: enableAdminChannel
+            ? ["ignore", "ignore", "ignore", "pipe", "ipc"]
+            : "ignore",
           windowsHide: true,
         },
       );
@@ -327,6 +350,9 @@ function createCoreLifecycle({
       lastExit = null;
       lastFailure = null;
       attachChildLifecycle(child, "startup");
+      if (enableAdminChannel) {
+        adminChannel = createCoreAdminChannel({ child });
+      }
 
       const reachable = await waitUntilReachable(Date.now() + startupTimeoutMs);
       if (reachable.reachable) return describeReachable({ externallyManaged: true });
@@ -381,6 +407,8 @@ function createCoreLifecycle({
     }
 
     const child = ownedChild;
+    adminChannel?.close?.();
+    adminChannel = null;
     return requestOwnedChildStop(child, {
       operation: "shutdown",
       timeoutMs: shutdownTimeoutMs,
@@ -407,6 +435,10 @@ function createCoreLifecycle({
         stopping: ownedChildStopping,
         lastFailure,
         lastExit,
+        adminChannel: adminChannel?.getStatus?.() ?? {
+          state: "unavailable",
+          ready: false,
+        },
       },
     });
   }
@@ -420,6 +452,7 @@ function createCoreLifecycle({
 }
 
 module.exports = {
+  OWNED_CORE_ADMIN_IPC_ARG,
   createCoreLifecycle,
   resolveLaunchConfiguration,
 };

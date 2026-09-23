@@ -12,6 +12,7 @@ export const LOCAL_ADMIN_CHALLENGE_BYTES = 32;
 
 export const LOCAL_ADMIN_ACTIONS = Object.freeze({
   HANDSHAKE_RESPONSE: "admin.hello.response",
+  HANDSHAKE_CONFIRM: "admin.hello.confirm",
   PAIRING_STATUS: "pairing.status",
   PAIRING_START: "pairing.start",
   PAIRING_CANCEL: "pairing.cancel",
@@ -470,6 +471,49 @@ export function verifyLocalAdminHandshakeResponse(capability, challenge, respons
     throw protocolError(
       "AUTHENTICATION_FAILED",
       "Local admin handshake authentication failed.",
+    );
+  }
+
+  return Object.freeze({
+    version: verified.version,
+    requestId: verified.requestId,
+    action: verified.action,
+    nonce: verified.nonce,
+  });
+}
+
+export function createLocalAdminHandshakeConfirmation(capability, challenge, {
+  requestId,
+  randomBytes = cryptoRandomBytes,
+} = {}) {
+  const validatedChallenge = validateHandshakeChallenge(challenge);
+  return signLocalAdminMessage(capability, {
+    requestId,
+    action: LOCAL_ADMIN_ACTIONS.HANDSHAKE_CONFIRM,
+    payload: {
+      challenge: validatedChallenge.challenge,
+      ready: true,
+    },
+    randomBytes,
+  });
+}
+
+export function verifyLocalAdminHandshakeConfirmation(capability, challenge, confirmation, {
+  replayGuard,
+} = {}) {
+  const validatedChallenge = validateHandshakeChallenge(challenge);
+  const verified = verifyLocalAdminMessage(capability, confirmation, { replayGuard });
+
+  if (
+    verified.action !== LOCAL_ADMIN_ACTIONS.HANDSHAKE_CONFIRM
+    || !isPlainObject(verified.payload)
+    || verified.payload.challenge !== validatedChallenge.challenge
+    || verified.payload.ready !== true
+    || Object.keys(verified.payload).length !== 2
+  ) {
+    throw protocolError(
+      "AUTHENTICATION_FAILED",
+      "Local admin handshake confirmation failed.",
     );
   }
 
