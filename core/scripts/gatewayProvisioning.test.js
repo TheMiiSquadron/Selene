@@ -139,19 +139,28 @@ test("list displays metadata without revealing bearer secrets", async () => {
 
 test("guard rejects a missing database without creating it", async () => {
   const directory = await mkdtemp(join(tmpdir(), "selene-provisioning-missing-"));
-  const databasePath = join(directory, "missing.sqlite3");
+  const previousLocalAppData = process.env.LOCALAPPDATA;
+  const databasePath = resolveDefaultGatewayCredentialDatabasePath({
+    LOCALAPPDATA: directory,
+  });
 
   try {
+    process.env.LOCALAPPDATA = directory;
     assert.throws(
       () => listGatewayCredentials({
-        databasePath,
-        expectedDatabasePath: databasePath,
+        databasePath: join(directory, "missing.sqlite3"),
+        expectedDatabasePath: join(directory, "missing.sqlite3"),
       }),
       /Gateway credential database must already exist as a regular file/,
     );
 
     await assert.rejects(access(databasePath), { code: "ENOENT" });
   } finally {
+    if (previousLocalAppData === undefined) {
+      delete process.env.LOCALAPPDATA;
+    } else {
+      process.env.LOCALAPPDATA = previousLocalAppData;
+    }
     await rm(directory, { recursive: true, force: true });
   }
 });
@@ -187,6 +196,7 @@ test("disposable listing rejects direct symbolic-link path input", async (t) => 
 test("production listing ignores caller-supplied path and inspector overrides", async () => {
   const directory = await mkdtemp(join(tmpdir(), "selene-provisioning-production-list-"));
   const arbitraryDirectory = await mkdtemp(join(tmpdir(), "selene-provisioning-arbitrary-"));
+  const previousLocalAppData = process.env.LOCALAPPDATA;
   const productionPath = resolveDefaultGatewayCredentialDatabasePath({
     LOCALAPPDATA: directory,
   });
@@ -200,6 +210,7 @@ test("production listing ignores caller-supplied path and inspector overrides", 
   arbitraryStore.close();
 
   try {
+    process.env.LOCALAPPDATA = directory;
     assert.throws(
       () => listGatewayCredentials({
         databasePath: arbitraryPath,
@@ -213,6 +224,11 @@ test("production listing ignores caller-supplied path and inspector overrides", 
     );
     await assert.rejects(access(productionPath), { code: "ENOENT" });
   } finally {
+    if (previousLocalAppData === undefined) {
+      delete process.env.LOCALAPPDATA;
+    } else {
+      process.env.LOCALAPPDATA = previousLocalAppData;
+    }
     await rm(directory, { recursive: true, force: true });
     await rm(arbitraryDirectory, { recursive: true, force: true });
   }
