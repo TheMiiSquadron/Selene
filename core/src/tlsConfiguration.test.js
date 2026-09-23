@@ -30,8 +30,11 @@ function certificate({ san = HOST, from = "20200101000000Z", to = "2040010100000
   const validity = seq(der(0x18, Buffer.from(from)), der(0x18, Buffer.from(to)));
   const extensions = der(0xa3, seq(seq(oid(0x55, 0x1d, 0x11), der(0x04,
     seq(der(0x82, Buffer.from(san)))))));
-  const serial = randomBytes(16);
-  serial[0] &= 0x7f;
+  const serialBytes = randomBytes(16);
+  if (serialBytes[0] === 0) serialBytes[0] = 1;
+  const serial = serialBytes[0] & 0x80
+    ? Buffer.concat([Buffer.from([0]), serialBytes])
+    : serialBytes;
   const tbs = seq(der(0xa0, der(0x02, Buffer.from([2]))), der(0x02, serial),
     algorithm, name, validity, name, publicKey, extensions);
   const pem = seq(tbs, algorithm,

@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { coreConfigPath } from "./paths.js";
 
 export const MODEL_ROLES = Object.freeze(["fast", "primary", "specialized"]);
-export const DEFAULT_MODEL_PROFILE_PATH = resolve("config", "modelProfiles.json");
+export const DEFAULT_MODEL_PROFILE_PATH = coreConfigPath("modelProfiles.json");
 
 export class ModelProfileError extends Error {
   constructor(message) {

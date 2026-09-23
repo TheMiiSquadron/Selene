@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { coreConfigPath } from "./paths.js";
 
-const AUTHORITY_PATH = resolve("config", "authority.json");
+export const AUTHORITY_PATH = coreConfigPath("authority.json");
 const MIN_LEVEL = 1;
 const MAX_LEVEL = 10;
 const DEFAULT_LEVEL = 4;

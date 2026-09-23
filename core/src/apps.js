@@ -1,9 +1,9 @@
 import { constants } from "node:fs";
 import { access, readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { coreConfigPath } from "./paths.js";
 
-const APPS_PATH = resolve("config", "apps.json");
-const APP_PERMISSIONS_PATH = resolve("config", "applicationPermissions.json");
+export const APPS_PATH = coreConfigPath("apps.json");
+export const APP_PERMISSIONS_PATH = coreConfigPath("applicationPermissions.json");
 const SUPPORTED_LAUNCH_TYPES = new Set(["exe", "shortcut", "uri"]);
 
 export const BUILTIN_APPS = {

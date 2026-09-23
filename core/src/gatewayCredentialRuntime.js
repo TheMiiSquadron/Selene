@@ -257,10 +257,11 @@ function applyWindowsGatewayCredentialAcl(pathValue, { directory }) {
   });
 }
 
-function assertAcl(result, { directory }) {
+function assertAclBase(result, { requireProtected }) {
   if (
     !result
-    || result.protected !== true
+    || (requireProtected && result.protected !== true)
+    || (!requireProtected && typeof result.protected !== "boolean")
     || result.canonical !== true
     || typeof result.userSid !== "string"
     || !SID_PATTERN.test(result.userSid)
@@ -271,6 +272,12 @@ function assertAcl(result, { directory }) {
     fail("Gateway credential storage permissions are not restricted.");
   }
 
+}
+
+function assertAclRules(result, {
+  directory,
+  inherited,
+}) {
   const expected = new Set([result.userSid, ...APPROVED_SYSTEM_SIDS]);
   for (const rule of result.rules) {
     if (!rule || !expected.delete(rule.sid) || rule.type !== "Allow") {
@@ -283,16 +290,27 @@ function assertAcl(result, { directory }) {
     ) {
       fail("Gateway credential storage permissions are not restricted.");
     }
-    if (directory && rule.inherited !== false) {
-      fail("Gateway credential storage permissions are not restricted.");
-    }
-    if (!directory && typeof rule.inherited !== "boolean") {
+    if (rule.inherited !== inherited) {
       fail("Gateway credential storage permissions are not restricted.");
     }
   }
   if (expected.size !== 0) {
     fail("Gateway credential storage permissions are not restricted.");
   }
+}
+
+function assertAcl(result, { directory }) {
+  assertAclBase(result, { requireProtected: true });
+  assertAclRules(result, { directory, inherited: false });
+}
+
+function assertSqliteSidecarAcl(result) {
+  assertAclBase(result, { requireProtected: false });
+  if (result.protected === true) {
+    assertAclRules(result, { directory: false, inherited: false });
+    return;
+  }
+  assertAclRules(result, { directory: false, inherited: true });
 }
 
 function verifyStoragePaths(paths, { inspectAcl = inspectWindowsGatewayCredentialAcl } = {}) {
@@ -306,7 +324,7 @@ function verifyStoragePaths(paths, { inspectAcl = inspectWindowsGatewayCredentia
   assertAcl(inspectAcl(paths.databasePath), { directory: false });
   for (const sidecarPath of paths.sidecarPaths) {
     if (existsSync(sidecarPath)) {
-      assertAcl(inspectAcl(sidecarPath), { directory: false });
+      assertSqliteSidecarAcl(inspectAcl(sidecarPath));
     }
   }
 }

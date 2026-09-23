@@ -1,7 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
+import { spawn } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { createCoreServer, startCoreServer, startSeleneServers } from "./server.js";
+
+const require = createRequire(import.meta.url);
+const { createCoreAdminChannel } = require("../../pebble/src/coreAdminChannel.cjs");
+
+const TEST_DIR = dirname(fileURLToPath(import.meta.url));
+const CORE_DIR = dirname(TEST_DIR);
+const SERVER_ENTRYPOINT = join(TEST_DIR, "server.js");
+const OWNED_CORE_ADMIN_IPC_ARG = "--selene-owned-core-admin-ipc";
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -118,6 +132,43 @@ test("Companion bind failure does not open the Core listener", async () => {
     assert.match(companionErrors[0], /port is already in use/);
   } finally {
     await close(occupied);
+  }
+});
+
+test("owned Core admin channel starts before production credential issuer validation", async () => {
+  const localAppData = await mkdtemp(join(tmpdir(), "selene-owned-core-startup-"));
+  const child = spawn(
+    process.execPath,
+    [SERVER_ENTRYPOINT, OWNED_CORE_ADMIN_IPC_ARG],
+    {
+      cwd: TEST_DIR,
+      env: {
+        ...process.env,
+        LOCALAPPDATA: localAppData,
+      },
+      shell: false,
+      stdio: ["ignore", "ignore", "ignore", "pipe", "ipc"],
+      windowsHide: true,
+    },
+  );
+  const adminChannel = createCoreAdminChannel({ child });
+
+  try {
+    const ready = await adminChannel.ready;
+    assert.equal(ready.ready, true);
+    assert.equal(ready.state, "ready");
+  } finally {
+    adminChannel.close();
+    if (!child.killed) child.kill();
+    await new Promise((resolve) => {
+      if (child.exitCode !== null || child.signalCode !== null) {
+        resolve();
+        return;
+      }
+      child.once("exit", resolve);
+      setTimeout(resolve, 2_000).unref();
+    });
+    await rm(localAppData, { recursive: true, force: true });
   }
 });
 

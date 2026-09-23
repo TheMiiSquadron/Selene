@@ -1,11 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
   mkdir,
   mkdtemp,
   rm,
   symlink,
+  writeFile,
 } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,6 +21,7 @@ import {
   GATEWAY_RUNTIME_TOCTOU_LIMITATION,
   GatewayCredentialRuntimeError,
   getProductionGatewayCredentialStorageStatus,
+  inspectWindowsGatewayCredentialAcl,
   openProductionGatewayCredentialIssuer,
   setupProductionGatewayCredentialStorage,
 } from "./gatewayCredentialRuntime.js";
@@ -69,6 +72,74 @@ function openRawDatabase(databasePath) {
   return new DatabaseSync(databasePath);
 }
 
+function runPowerShellTestScript(script, env = {}) {
+  const encoded = Buffer.from(script, "utf16le").toString("base64");
+  execFileSync("powershell.exe", [
+    "-NoProfile",
+    "-NonInteractive",
+    "-EncodedCommand",
+    encoded,
+  ], {
+    env: { ...process.env, ...env },
+    encoding: "utf8",
+    timeout: 10_000,
+    maxBuffer: 64 * 1024,
+    windowsHide: true,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+}
+
+function makeAclInherited(filePath) {
+  runPowerShellTestScript(String.raw`
+$ErrorActionPreference = 'Stop'
+$path = $env:SELENE_TEST_ACL_PATH
+$acl = Get-Acl -LiteralPath $path
+$acl.SetAccessRuleProtection($false, $false)
+$explicit = @($acl.GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]))
+foreach ($rule in $explicit) {
+  [void]$acl.RemoveAccessRuleAll($rule)
+}
+Set-Acl -LiteralPath $path -AclObject $acl
+`, {
+    SELENE_TEST_ACL_PATH: filePath,
+  });
+}
+
+function addSidecarAclRule(filePath, {
+  sid,
+  rights,
+  type = "Allow",
+}) {
+  runPowerShellTestScript(String.raw`
+$ErrorActionPreference = 'Stop'
+$path = $env:SELENE_TEST_ACL_PATH
+$sid = New-Object Security.Principal.SecurityIdentifier $env:SELENE_TEST_ACL_SID
+$rights = [Enum]::Parse([Security.AccessControl.FileSystemRights], $env:SELENE_TEST_ACL_RIGHTS)
+$type = [Enum]::Parse([Security.AccessControl.AccessControlType], $env:SELENE_TEST_ACL_TYPE)
+$acl = Get-Acl -LiteralPath $path
+$rule = New-Object Security.AccessControl.FileSystemAccessRule(
+  $sid,
+  $rights,
+  [Security.AccessControl.InheritanceFlags]::None,
+  [Security.AccessControl.PropagationFlags]::None,
+  $type
+)
+$acl.AddAccessRule($rule)
+Set-Acl -LiteralPath $path -AclObject $acl
+`, {
+    SELENE_TEST_ACL_PATH: filePath,
+    SELENE_TEST_ACL_SID: sid,
+    SELENE_TEST_ACL_RIGHTS: rights,
+    SELENE_TEST_ACL_TYPE: type,
+  });
+}
+
+async function ensureSidecarFile(sidecarPath) {
+  if (!existsSync(sidecarPath)) {
+    await writeFile(sidecarPath, "");
+  }
+}
+
 test("explicit setup creates a reusable restricted production-style database", async (t) => {
   requireWindows(t);
   await withIsolatedLocalAppData(t, ({ databasePath }) => {
@@ -101,6 +172,99 @@ test("explicit setup creates a reusable restricted production-style database", a
     }
   });
 });
+
+test("runtime opening accepts inherited restricted SQLite sidecar ACLs", async (t) => {
+  requireWindows(t);
+  await withIsolatedLocalAppData(t, ({ databasePath }) => {
+    setupProductionGatewayCredentialStorage();
+    const heldStore = createGatewayCredentialStore({ databasePath });
+    const sidecars = [`${databasePath}-wal`, `${databasePath}-shm`];
+    try {
+      for (const sidecar of sidecars) {
+        assert.equal(existsSync(sidecar), true);
+        makeAclInherited(sidecar);
+      }
+
+      const status = getProductionGatewayCredentialStorageStatus();
+      assert.equal(status.ok, true);
+      const issuer = openProductionGatewayCredentialIssuer();
+      issuer.close();
+    } finally {
+      heldStore.close();
+    }
+  });
+});
+
+test("runtime opening rejects inherited sidecars with unexpected principals or rules", async (t) => {
+  requireWindows(t);
+  await withIsolatedLocalAppData(t, async ({ databasePath }) => {
+    setupProductionGatewayCredentialStorage();
+    const sidecar = `${databasePath}-wal`;
+    await ensureSidecarFile(sidecar);
+    makeAclInherited(sidecar);
+    addSidecarAclRule(sidecar, {
+      sid: "S-1-5-32-546",
+      rights: "FullControl",
+    });
+    assert.throws(
+      () => openProductionGatewayCredentialIssuer(),
+      /permissions are not restricted/u,
+    );
+  });
+});
+
+test("runtime opening rejects inherited sidecars with deny or non-FullControl rules", async (t) => {
+  requireWindows(t);
+  await withIsolatedLocalAppData(t, async ({ databasePath }) => {
+    setupProductionGatewayCredentialStorage();
+    const deniedSidecar = `${databasePath}-wal`;
+    await ensureSidecarFile(deniedSidecar);
+    makeAclInherited(deniedSidecar);
+    addSidecarAclRule(deniedSidecar, {
+      sid: "S-1-5-32-546",
+      rights: "ReadData",
+      type: "Deny",
+    });
+    assert.throws(
+      () => openProductionGatewayCredentialIssuer(),
+      /permissions are not restricted/u,
+    );
+
+    setupProductionGatewayCredentialStorage();
+    const weakSidecar = `${databasePath}-shm`;
+    await ensureSidecarFile(weakSidecar);
+    makeAclInherited(weakSidecar);
+    addSidecarAclRule(weakSidecar, {
+      sid: "S-1-5-32-546",
+      rights: "ReadData",
+    });
+    assert.throws(
+      () => openProductionGatewayCredentialIssuer(),
+      /permissions are not restricted/u,
+    );
+  });
+});
+
+test("runtime opening keeps strict security directory and main database ACL policy", async (t) => {
+  requireWindows(t);
+  await withIsolatedLocalAppData(t, ({ databasePath }) => {
+    const store = createGatewayCredentialStore({ databasePath });
+    store.close();
+    assert.throws(
+      () => openProductionGatewayCredentialIssuer(),
+      /permissions are not restricted/u,
+    );
+
+    setupProductionGatewayCredentialStorage();
+    const directoryAcl = inspectWindowsGatewayCredentialAcl(dirname(databasePath));
+    const databaseAcl = inspectWindowsGatewayCredentialAcl(databasePath);
+    assert.equal(directoryAcl.protected, true);
+    assert.equal(databaseAcl.protected, true);
+    assert.equal(directoryAcl.rules.every((rule) => rule.inherited === false), true);
+    assert.equal(databaseAcl.rules.every((rule) => rule.inherited === false), true);
+  });
+});
+
 test("runtime opening rejects missing directory and missing database without creating them", async (t) => {
   requireWindows(t);
   await withIsolatedLocalAppData(t, async ({ databasePath }) => {
@@ -181,6 +345,38 @@ test("runtime opening rejects detectable symbolic database substitution", async 
       assert.throws(
         () => openProductionGatewayCredentialIssuer(),
         /symbolic links or junctions|regular file|substituted path/u,
+      );
+    } finally {
+      await rm(target, { force: true });
+    }
+  });
+});
+
+test("runtime opening rejects detectable symbolic sidecar substitution", async (t) => {
+  requireWindows(t);
+  await withIsolatedLocalAppData(t, async ({ databasePath }) => {
+    setupProductionGatewayCredentialStorage();
+    const sidecar = `${databasePath}-wal`;
+    const target = join(tmpdir(), `selene-gateway-runtime-sidecar-target-${randomUUID()}.sqlite3-wal`);
+    await rm(sidecar, { force: true });
+    const targetStore = createGatewayCredentialStore({ databasePath: target });
+    targetStore.close();
+
+    try {
+      await symlink(target, sidecar, "file");
+    } catch (error) {
+      await rm(target, { force: true });
+      if (error?.code === "EPERM" || error?.code === "EACCES") {
+        t.skip("Windows denied creating a symbolic link in this test environment.");
+        return;
+      }
+      throw error;
+    }
+
+    try {
+      assert.throws(
+        () => openProductionGatewayCredentialIssuer(),
+        /symbolic links or junctions|regular files|substituted path/u,
       );
     } finally {
       await rm(target, { force: true });

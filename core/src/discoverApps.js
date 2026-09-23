@@ -1,15 +1,17 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   BUILTIN_APPS,
   mergeAppRegistries,
   normalizeAliasList,
   normalizeAppName,
 } from "./apps.js";
+import { coreConfigPath } from "./paths.js";
 
 const execFileAsync = promisify(execFile);
+export const DISCOVER_APPS_PATH = coreConfigPath("apps.json");
 
 const wanted = [
   { id: "opera gx", name: "Opera GX", terms: ["Opera GX"], aliases: ["opera", "opera gx"] },
@@ -69,68 +71,73 @@ function findShortcut(shortcuts, item) {
   })[0];
 }
 
-const { stdout } = await execFileAsync(
-  "powershell.exe",
-  ["-NoProfile", "-NonInteractive", "-Command", ps],
-  { maxBuffer: 10 * 1024 * 1024 },
-);
-
-const shortcuts = parseShortcuts(stdout);
-const appsPath = resolve("config", "apps.json");
-const existing = JSON.parse(await readFile(appsPath, "utf-8"));
-const discovered = {};
-const found = [];
-const missing = [];
-
-for (const item of wanted) {
-  const id = normalizeAppName(item.id);
-  if (BUILTIN_APPS[id]) continue;
-
-  const hit = findShortcut(shortcuts, item);
-
-  if (!hit) {
-    missing.push(item.id);
-    continue;
-  }
-
-  discovered[id] = {
-    id,
-    name: item.name,
-    aliases: normalizeAliasList(id, item.aliases),
-    source: "start-menu",
-    launch: {
-      type: "shortcut",
-      target: String(hit.Shortcut),
-    },
-  };
-
-  found.push({
-    app: id,
-    shortcut: hit.Shortcut,
-    target: hit.Target,
-    aliases: discovered[id].aliases,
-  });
-}
-
-const merged = mergeAppRegistries(existing, discovered, BUILTIN_APPS);
-await writeFile(appsPath, `${JSON.stringify({
-  _comment: "Approved apps. Discovery/path/alias data only. Launch permissions are stored in config/applicationPermissions.json.",
-  ...merged,
-}, null, 2)}\n`, "utf-8");
-
-console.log("\nDiscovered approved apps:");
-
-for (const item of found) {
-  console.log(
-    `  OK  ${item.app} -> ${item.shortcut}  [aliases: ${item.aliases.join(", ")}]`,
+export async function discoverAppsMain({ appsPath = DISCOVER_APPS_PATH } = {}) {
+  const { stdout } = await execFileAsync(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-Command", ps],
+    { maxBuffer: 10 * 1024 * 1024 },
   );
-}
 
-if (missing.length) {
-  console.log("\nNot found automatically:");
-  for (const item of missing) {
-    console.log(`  --  ${item}`);
+  const shortcuts = parseShortcuts(stdout);
+  const existing = JSON.parse(await readFile(appsPath, "utf-8"));
+  const discovered = {};
+  const found = [];
+  const missing = [];
+
+  for (const item of wanted) {
+    const id = normalizeAppName(item.id);
+    if (BUILTIN_APPS[id]) continue;
+
+    const hit = findShortcut(shortcuts, item);
+
+    if (!hit) {
+      missing.push(item.id);
+      continue;
+    }
+
+    discovered[id] = {
+      id,
+      name: item.name,
+      aliases: normalizeAliasList(id, item.aliases),
+      source: "start-menu",
+      launch: {
+        type: "shortcut",
+        target: String(hit.Shortcut),
+      },
+    };
+
+    found.push({
+      app: id,
+      shortcut: hit.Shortcut,
+      target: hit.Target,
+      aliases: discovered[id].aliases,
+    });
   }
+
+  const merged = mergeAppRegistries(existing, discovered, BUILTIN_APPS);
+  await writeFile(appsPath, `${JSON.stringify({
+    _comment: "Approved apps. Discovery/path/alias data only. Launch permissions are stored in config/applicationPermissions.json.",
+    ...merged,
+  }, null, 2)}\n`, "utf-8");
+
+  console.log("\nDiscovered approved apps:");
+
+  for (const item of found) {
+    console.log(
+      `  OK  ${item.app} -> ${item.shortcut}  [aliases: ${item.aliases.join(", ")}]`,
+    );
+  }
+
+  if (missing.length) {
+    console.log("\nNot found automatically:");
+    for (const item of missing) {
+      console.log(`  --  ${item}`);
+    }
+  }
+
+  console.log("\nUpdated config/apps.json");
 }
 
-console.log("\nUpdated config/apps.json");
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await discoverAppsMain();
+}

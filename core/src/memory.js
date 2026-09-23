@@ -1,7 +1,8 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { coreConfigPath } from "./paths.js";
 
-const DEFAULT_MEMORY_PATH = resolve("config", "memory.json");
+export const DEFAULT_MEMORY_PATH = coreConfigPath("memory.json");
 const MAX_KEY_LENGTH = 80;
 const MAX_VALUE_BYTES = 4096;
 

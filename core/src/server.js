@@ -39,10 +39,12 @@ import {
 import { awarenessService } from "./awareness.js";
 import { startCompanionServer } from "./companionServer.js";
 import { createGatewayCredentialStore } from "./gatewayCredentialStore.js";
+import { openProductionGatewayCredentialIssuer } from "./gatewayCredentialRuntime.js";
 import {
   OWNED_CORE_ADMIN_IPC_ARG,
   startCoreLocalAdminChildChannel,
 } from "./localAdminChannel.js";
+import { createPairingClaimService } from "./pairingClaimService.js";
 import { createLocalPairingAdministration } from "./pairingAdministration.js";
 import { createPairingSessionManager } from "./pairingSessionManager.js";
 
@@ -632,7 +634,25 @@ function stopRuntimeServices() {
   awarenessService.stop();
 }
 
-function createRuntimePairingComposition() {
+function createLazyCredentialIssuerProvider({
+  openCredentialIssuer = openProductionGatewayCredentialIssuer,
+} = {}) {
+  let credentialIssuer = null;
+
+  return Object.freeze({
+    getCredentialIssuer() {
+      if (credentialIssuer) return credentialIssuer;
+      credentialIssuer = openCredentialIssuer();
+      return credentialIssuer;
+    },
+    close() {
+      credentialIssuer?.close?.();
+      credentialIssuer = null;
+    },
+  });
+}
+
+function createRuntimePairingComposition({ getCredentialIssuer = null } = {}) {
   const sessionManager = createPairingSessionManager();
   const pairingAdministration = createLocalPairingAdministration({ sessionManager });
   const pairingControls = Object.freeze({
@@ -651,10 +671,15 @@ function createRuntimePairingComposition() {
       });
     },
   });
+  const pairingClaimService = createPairingClaimService({
+    claimPairingSecret: sessionManager.claimSecret,
+    getCredentialIssuer,
+  });
 
   return Object.freeze({
     pairingAdministration,
     pairingControls,
+    pairingClaimService,
   });
 }
 
@@ -666,6 +691,7 @@ export async function startSeleneServers({
   onCompanionListening = console.log,
   onCompanionError = console.error,
   credentialStore = null,
+  pairingClaimService = null,
   pairingAdministration = createLocalPairingAdministration(),
 } = {}) {
   const companionServer = await startCompanionServer({
@@ -674,6 +700,7 @@ export async function startSeleneServers({
     onListening: onCompanionListening,
     onError: onCompanionError,
     credentialStore,
+    pairingClaimService,
   });
   if (!companionServer) {
     throw new Error("Selene Companion API failed to start.");
@@ -711,18 +738,30 @@ export async function closeSeleneServers({
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   let listeners;
   let credentialStore;
+  const credentialIssuerProvider = createLazyCredentialIssuerProvider();
   let localAdminChannel;
   try {
-    const { pairingAdministration, pairingControls } = createRuntimePairingComposition();
+    const {
+      pairingAdministration,
+      pairingControls,
+      pairingClaimService,
+    } = createRuntimePairingComposition({
+      getCredentialIssuer: credentialIssuerProvider.getCredentialIssuer,
+    });
     if (process.argv.includes(OWNED_CORE_ADMIN_IPC_ARG)) {
       localAdminChannel = startCoreLocalAdminChildChannel({
         pairingControls,
       });
     }
     credentialStore = createGatewayCredentialStore();
-    listeners = await startSeleneServers({ credentialStore, pairingAdministration });
+    listeners = await startSeleneServers({
+      credentialStore,
+      pairingAdministration,
+      pairingClaimService,
+    });
   } catch (error) {
     localAdminChannel?.close?.();
+    credentialIssuerProvider.close();
     credentialStore?.close();
     console.error(`Selene startup failed: ${error.message}`);
     process.exitCode = 1;
@@ -733,6 +772,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
       stopRuntimeServices();
       localAdminChannel?.close?.();
       await closeSeleneServers(listeners);
+      credentialIssuerProvider.close();
       credentialStore.close();
       process.exit(0);
     };

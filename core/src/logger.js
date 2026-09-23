@@ -1,7 +1,8 @@
 import { appendFile, mkdir } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname } from "node:path";
+import { coreLogPath } from "./paths.js";
 
-const LOG_PATH = resolve("logs", "nova.log");
+export const LOG_PATH = coreLogPath("nova.log");
 
 export async function logEvent(event) {
   await mkdir(dirname(LOG_PATH), { recursive: true });

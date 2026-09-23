@@ -131,10 +131,11 @@ function corsHeaders(request) {
   };
 }
 
-function sendJson(request, response, statusCode, payload) {
+function sendJson(request, response, statusCode, payload, extraHeaders = {}) {
   const body = JSON.stringify(payload);
   response.writeHead(statusCode, {
     ...corsHeaders(request),
+    ...extraHeaders,
     "Content-Type": "application/json; charset=utf-8",
     "Content-Length": Buffer.byteLength(body),
   });
@@ -149,13 +150,25 @@ function sendNoContent(request, response) {
   response.end();
 }
 
-function sendError(request, response, statusCode, code, message) {
+function sendError(request, response, statusCode, code, message, extraHeaders = {}) {
   sendJson(request, response, statusCode, {
     ok: false,
     error: {
       code,
       message,
     },
+  }, extraHeaders);
+}
+
+function sendNoStoreJson(request, response, statusCode, payload) {
+  sendJson(request, response, statusCode, payload, {
+    "Cache-Control": "no-store",
+  });
+}
+
+function sendNoStoreError(request, response, statusCode, code, message) {
+  sendError(request, response, statusCode, code, message, {
+    "Cache-Control": "no-store",
   });
 }
 
@@ -292,6 +305,62 @@ async function handleChat(request, response, chatHandler) {
   }
 }
 
+async function handlePairingClaim(request, response, pairingClaimService) {
+  const noStore = { "Cache-Control": "no-store" };
+
+  if (!request.socket.encrypted) {
+    sendNoStoreError(request, response, 426, "HTTPS_REQUIRED", "HTTPS is required.");
+    return;
+  }
+
+  if (!isJsonContentType(request)) {
+    sendNoStoreError(
+      request,
+      response,
+      415,
+      "UNSUPPORTED_CONTENT_TYPE",
+      "Content-Type must be application/json.",
+    );
+    return;
+  }
+
+  let payload;
+  try {
+    payload = await readJsonBody(request);
+  } catch (error) {
+    if (error instanceof CompanionChatValidationError) {
+      sendNoStoreError(request, response, 400, "INVALID_REQUEST", "Invalid pairing claim request.");
+      return;
+    }
+    sendNoStoreError(request, response, 400, "INVALID_REQUEST", "Invalid pairing claim request.");
+    return;
+  }
+
+  if (!pairingClaimService || typeof pairingClaimService.claim !== "function") {
+    sendNoStoreError(request, response, 503, "PAIRING_UNAVAILABLE", "Pairing is unavailable.");
+    return;
+  }
+
+  try {
+    const result = pairingClaimService.claim(payload);
+    sendJson(request, response, 200, result, noStore);
+  } catch (error) {
+    if (error?.code === "INVALID_REQUEST") {
+      sendNoStoreError(request, response, 400, "INVALID_REQUEST", "Invalid pairing claim request.");
+      return;
+    }
+    if (error?.code === "PAIRING_FAILED") {
+      sendNoStoreError(request, response, 401, "PAIRING_FAILED", "Pairing failed.");
+      return;
+    }
+    if (error?.code === "PAIRING_UNAVAILABLE") {
+      sendNoStoreError(request, response, 503, "PAIRING_UNAVAILABLE", "Pairing is unavailable.");
+      return;
+    }
+    sendNoStoreError(request, response, 500, "INTERNAL_ERROR", "Pairing claim failed.");
+  }
+}
+
 export function createCompanionServer({
   host = COMPANION_HOST,
   port = COMPANION_PORT,
@@ -299,6 +368,7 @@ export function createCompanionServer({
   name = "Selene Core",
   chatHandler = handleCompanionChat,
   credentialStore = null,
+  pairingClaimService = null,
   tlsOptions = null,
 } = {}) {
   const handler = async (request, response) => {
@@ -335,6 +405,22 @@ export function createCompanionServer({
       return;
     }
 
+    if (request.method === "POST" && url.pathname === "/api/pairing/claim") {
+      await handlePairingClaim(request, response, pairingClaimService);
+      return;
+    }
+
+    if (url.pathname === "/api/pairing/claim") {
+      sendNoStoreError(
+        request,
+        response,
+        405,
+        "METHOD_NOT_ALLOWED",
+        "POST /api/pairing/claim is required.",
+      );
+      return;
+    }
+
     sendJson(request, response, 404, {
       ok: false,
       message: "Not found.",
@@ -353,6 +439,7 @@ export function startCompanionServer({
   onListening = console.log,
   onError = console.error,
   credentialStore = null,
+  pairingClaimService = null,
   transport,
 } = {}) {
   if (transport !== undefined) {
@@ -368,6 +455,7 @@ export function startCompanionServer({
     port,
     tlsOptions: configuration.tlsOptions,
     credentialStore,
+    pairingClaimService,
   });
 
   return new Promise((resolve) => {
