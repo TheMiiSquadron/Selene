@@ -12,6 +12,8 @@ const pairingBadge = document.querySelector("#pairing-badge");
 const pairingSecretWrap = document.querySelector("#pairing-secret-wrap");
 const pairingSecretText = document.querySelector("#pairing-secret");
 const pairingExpiration = document.querySelector("#pairing-expiration");
+const pairingSecureCoreButton = document.querySelector("#pairing-secure-core");
+const pairingCheckButton = document.querySelector("#pairing-check");
 const pairingStartButton = document.querySelector("#pairing-start");
 const pairingCancelButton = document.querySelector("#pairing-cancel");
 const stateSwitcher = document.querySelector("#state-switcher");
@@ -1115,6 +1117,11 @@ function renderPairingCard() {
   const canCancel = pairingState.availability === "available"
     && !pairingBusy
     && pairingState.phase === "active";
+  const canStartSecureCore = pairingState.availability !== "available"
+    && pairingState.phase === "no-core"
+    && pairingState.secureCoreBusy !== true;
+  const canCheckAgain = pairingState.availability !== "available"
+    && pairingState.secureCoreBusy !== true;
 
   if (pairingMessage) {
     const remaining = pairingSecondsRemaining();
@@ -1129,6 +1136,11 @@ function renderPairingCard() {
       ready: "Ready",
       active: "Active",
       expired: "Expired",
+      "no-core": "Secure Core required",
+      "external-core": "External Core",
+      "secure-core-launching": "Starting",
+      "secure-core-connecting": "Securing",
+      "secure-core-failed": "Check",
       error: "Check",
     })[pairingState.phase] ?? "Unavailable";
   }
@@ -1152,10 +1164,22 @@ function renderPairingCard() {
 
   if (pairingStartButton) {
     pairingStartButton.disabled = !canStart;
+    pairingStartButton.hidden = pairingState.availability !== "available";
   }
 
   if (pairingCancelButton) {
     pairingCancelButton.disabled = !canCancel;
+    pairingCancelButton.hidden = pairingState.availability !== "available";
+  }
+
+  if (pairingSecureCoreButton) {
+    pairingSecureCoreButton.disabled = !canStartSecureCore;
+    pairingSecureCoreButton.hidden = pairingState.availability === "available";
+  }
+
+  if (pairingCheckButton) {
+    pairingCheckButton.disabled = !canCheckAgain;
+    pairingCheckButton.hidden = pairingState.availability === "available";
   }
 
   requestPanelResize();
@@ -1213,6 +1237,46 @@ async function refreshPairingStatus() {
       window.SelenePairingPanelState.applyUnavailable(
         pairingState,
         "Secure pairing status is unavailable.",
+      ),
+    );
+  }
+}
+
+async function startSecureCoreFromUi() {
+  if (pairingBusy || pairingState.secureCoreBusy) return;
+
+  setPairingState(
+    window.SelenePairingPanelState.withSecureCoreBusy(
+      {
+        ...pairingState,
+        phase: "secure-core-launching",
+        message: "Starting Secure Core…",
+      },
+      true,
+    ),
+  );
+
+  try {
+    const response =
+      await window.novaPanel.startSecureCore();
+    setPairingState(
+      window.SelenePairingPanelState.applySecureCoreStartResult(
+        pairingState,
+        response,
+      ),
+    );
+    if (response?.ok === true) {
+      await refreshPairingStatus();
+    }
+  } catch {
+    setPairingState(
+      window.SelenePairingPanelState.applySecureCoreStartResult(
+        pairingState,
+        {
+          ok: false,
+          state: "secure-core-failed",
+          message: "Secure Core launch failed.",
+        },
       ),
     );
   }
@@ -1444,6 +1508,22 @@ pairingCancelButton?.addEventListener(
   "click",
   () => {
     void cancelPairingFromUi();
+  },
+);
+
+
+pairingSecureCoreButton?.addEventListener(
+  "click",
+  () => {
+    void startSecureCoreFromUi();
+  },
+);
+
+
+pairingCheckButton?.addEventListener(
+  "click",
+  () => {
+    void refreshPairingStatus();
   },
 );
 

@@ -73,6 +73,22 @@ function resolveLaunchConfiguration({
   });
 }
 
+function createSecureCoreStatus({
+  ok,
+  state,
+  message,
+  lifecycle = null,
+  adminChannel = null,
+} = {}) {
+  return Object.freeze({
+    ok: Boolean(ok),
+    state,
+    message,
+    lifecycle,
+    adminChannel,
+  });
+}
+
 function createCoreLifecycle({
   coreBaseUrl = "http://127.0.0.1:3030",
   fetchImpl = globalThis.fetch,
@@ -395,6 +411,64 @@ function createCoreLifecycle({
     }
   }
 
+  async function startSecureCore() {
+    const started = await startOwnedCore({ enableAdminChannel: true });
+    const adminStatus = getAdminChannelStatus();
+
+    if (started.state === "startup-failed") {
+      return createSecureCoreStatus({
+        ok: false,
+        state: "startup-failed",
+        message: "Secure Core launch failed.",
+        lifecycle: started,
+        adminChannel: adminStatus,
+      });
+    }
+
+    if (!hasOwnedChild() || !adminChannel) {
+      return createSecureCoreStatus({
+        ok: false,
+        state: started.state === "externally-managed" ? "external-core" : "unavailable",
+        message: started.state === "externally-managed"
+          ? "Core is running externally. Close it manually before starting Secure Core."
+          : "Secure Core could not be started.",
+        lifecycle: started,
+        adminChannel: adminStatus,
+      });
+    }
+
+    try {
+      await adminChannel.ready;
+    } catch {
+      return createSecureCoreStatus({
+        ok: false,
+        state: "authentication-failed",
+        message: "Secure Core could not establish an authenticated admin channel.",
+        lifecycle: getOwnershipSnapshot(),
+        adminChannel: getAdminChannelStatus(),
+      });
+    }
+
+    const readyStatus = getAdminChannelStatus();
+    if (readyStatus.ready !== true) {
+      return createSecureCoreStatus({
+        ok: false,
+        state: "authentication-failed",
+        message: "Secure Core admin channel is not ready.",
+        lifecycle: getOwnershipSnapshot(),
+        adminChannel: readyStatus,
+      });
+    }
+
+    return createSecureCoreStatus({
+      ok: true,
+      state: "secure-core-ready",
+      message: "Secure Core connected.",
+      lifecycle: getOwnershipSnapshot(),
+      adminChannel: readyStatus,
+    });
+  }
+
   async function shutdownOwnedCore() {
     if (shutdownInProgress) return shutdownInProgress;
 
@@ -479,6 +553,7 @@ function createCoreLifecycle({
   return Object.freeze({
     checkAvailability,
     startOwnedCore,
+    startSecureCore,
     shutdownOwnedCore,
     getOwnershipSnapshot,
     getAdminChannelStatus,

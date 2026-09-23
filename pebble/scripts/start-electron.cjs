@@ -3,6 +3,7 @@ const electron = require("electron");
 
 const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;
+env.SELENE_PEBBLE_NODE_EXECUTABLE = process.execPath;
 
 const child = spawn(electron, [".", ...process.argv.slice(2)], {
   stdio: "inherit",

@@ -7,7 +7,7 @@ const {
   normalizeProactiveNotifications,
   shouldShowProactiveState,
 } = require("./shared/proactiveNotifications.cjs");
-const { createCoreLifecycle } = require("./coreLifecycle.cjs");
+const { createCoreLifecycle, resolveLaunchConfiguration } = require("./coreLifecycle.cjs");
 const { registerPairingIpcHandlers } = require("./pairingIpc.cjs");
 
 const PEBBLE_WINDOW = { width: 72, height: 64 };
@@ -24,7 +24,12 @@ const NOVA_CORE_COMMAND_URL = "http://127.0.0.1:3030/command";
 const NOVA_CORE_BASE_URL = "http://127.0.0.1:3030";
 const SETUP_VERSION = 1;
 const TRAY_ASSET_DIR = path.join(__dirname, "..", "assets", "tray");
-const coreLifecycle = createCoreLifecycle({ coreBaseUrl: NOVA_CORE_BASE_URL });
+const coreLifecycle = createCoreLifecycle({
+  coreBaseUrl: NOVA_CORE_BASE_URL,
+  launchConfiguration: resolveLaunchConfiguration({
+    nodeExecutable: process.env.SELENE_PEBBLE_NODE_EXECUTABLE,
+  }),
+});
 const LIFECYCLE_QUIT_TIMEOUT_MS = 2500;
 
 fs.mkdirSync(USER_DATA_DIR, { recursive: true });

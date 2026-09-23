@@ -39,6 +39,7 @@
       session: null,
       pairingSecret: null,
       busy: false,
+      secureCoreBusy: false,
       cancelUnconfirmed: false,
     });
   }
@@ -47,6 +48,14 @@
     return Object.freeze({
       ...state,
       busy: Boolean(busy),
+    });
+  }
+
+  function withSecureCoreBusy(state, busy) {
+    return Object.freeze({
+      ...state,
+      secureCoreBusy: Boolean(busy),
+      pairingSecret: busy ? null : state.pairingSecret,
     });
   }
 
@@ -67,13 +76,28 @@
       session: null,
       pairingSecret: null,
       busy: false,
+      secureCoreBusy: false,
       cancelUnconfirmed: false,
     });
   }
 
   function applyStatus(state, response, nowMs = Date.now()) {
-    if (!isPlainObject(response) || response.ok === false || response.available !== true) {
+    if (!isPlainObject(response) || response.ok === false) {
       return applyUnavailable(state, response?.message);
+    }
+
+    if (response.available !== true) {
+      return Object.freeze({
+        ...state,
+        availability: "unavailable",
+        phase: response.state || "unavailable",
+        message: response.message || "Secure pairing is unavailable.",
+        session: null,
+        pairingSecret: null,
+        busy: false,
+        secureCoreBusy: false,
+        cancelUnconfirmed: false,
+      });
     }
 
     const session = normalizeSession(response.session);
@@ -86,6 +110,7 @@
         session: null,
         pairingSecret: null,
         busy: false,
+        secureCoreBusy: false,
         cancelUnconfirmed: false,
       });
     }
@@ -99,6 +124,7 @@
         session,
         pairingSecret: null,
         busy: false,
+        secureCoreBusy: false,
         cancelUnconfirmed: false,
       });
     }
@@ -115,6 +141,35 @@
       session,
       pairingSecret: keepSecret,
       busy: false,
+      secureCoreBusy: false,
+      cancelUnconfirmed: false,
+    });
+  }
+
+  function applySecureCoreStartResult(state, response) {
+    if (isPlainObject(response) && response.ok === true && response.available === true) {
+      return Object.freeze({
+        ...state,
+        availability: "available",
+        phase: "ready",
+        message: response.message || "Secure Core connected. Ready to pair a device.",
+        session: null,
+        pairingSecret: null,
+        busy: false,
+        secureCoreBusy: false,
+        cancelUnconfirmed: false,
+      });
+    }
+
+    return Object.freeze({
+      ...state,
+      availability: "unavailable",
+      phase: response?.state || "secure-core-failed",
+      message: response?.message || "Secure Core launch failed.",
+      session: null,
+      pairingSecret: null,
+      busy: false,
+      secureCoreBusy: false,
       cancelUnconfirmed: false,
     });
   }
@@ -139,6 +194,7 @@
         message: "Pairing could not be started.",
         pairingSecret: null,
         busy: false,
+        secureCoreBusy: false,
       });
     }
 
@@ -163,6 +219,7 @@
         message: response?.message || "Secure Core pairing cancellation could not be confirmed.",
         pairingSecret: null,
         busy: false,
+        secureCoreBusy: false,
         cancelUnconfirmed: true,
       });
     }
@@ -175,6 +232,7 @@
       session: normalizeSession(response.session),
       pairingSecret: null,
       busy: false,
+      secureCoreBusy: false,
       cancelUnconfirmed: false,
     });
   }
@@ -191,15 +249,18 @@
       message: "Pairing expired.",
       pairingSecret: null,
       busy: false,
+      secureCoreBusy: false,
     });
   }
 
   return Object.freeze({
     createInitialPairingState,
     withBusy,
+    withSecureCoreBusy,
     clearSecret,
     applyUnavailable,
     applyStatus,
+    applySecureCoreStartResult,
     applyStartResult,
     applyCancelResult,
     expireIfNeeded,

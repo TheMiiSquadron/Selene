@@ -3,9 +3,11 @@ const assert = require("node:assert/strict");
 const {
   createInitialPairingState,
   withBusy,
+  withSecureCoreBusy,
   clearSecret,
   applyUnavailable,
   applyStatus,
+  applySecureCoreStartResult,
   applyStartResult,
   applyCancelResult,
   expireIfNeeded,
@@ -26,6 +28,46 @@ test("initial state is unavailable and secret-free", () => {
   assert.equal(state.availability, "unavailable");
   assert.equal(state.phase, "unavailable");
   assert.equal(state.pairingSecret, null);
+});
+
+test("no Core and external Core status select explicit transition states", () => {
+  const noCore = applyStatus(createInitialPairingState(), {
+    ok: true,
+    available: false,
+    state: "no-core",
+    message: "Device pairing requires Core to run securely under Pebble.",
+  }, NOW);
+  const external = applyStatus(noCore, {
+    ok: true,
+    available: false,
+    state: "external-core",
+    message: "Core is running externally. Close it manually, then check again.",
+  }, NOW);
+
+  assert.equal(noCore.phase, "no-core");
+  assert.equal(noCore.pairingSecret, null);
+  assert.equal(external.phase, "external-core");
+  assert.equal(external.pairingSecret, null);
+});
+
+test("Secure Core start result enables pairing only after success", () => {
+  const launched = applySecureCoreStartResult(createInitialPairingState(), {
+    ok: true,
+    available: true,
+    state: "ready",
+    message: "Secure Core connected. Ready to pair a device.",
+  });
+  const failed = applySecureCoreStartResult(launched, {
+    ok: false,
+    state: "secure-core-failed",
+    message: "Secure Core launch failed.",
+  });
+
+  assert.equal(launched.availability, "available");
+  assert.equal(launched.phase, "ready");
+  assert.equal(launched.pairingSecret, null);
+  assert.equal(failed.availability, "unavailable");
+  assert.equal(failed.phase, "secure-core-failed");
 });
 
 test("status active never invents or reveals a pairing secret", () => {
@@ -134,4 +176,17 @@ test("busy state does not expose secret through ordinary status transitions", ()
 
   assert.equal(state.busy, true);
   assert.equal(state.pairingSecret, null);
+});
+
+test("Secure Core launch busy state clears any displayed pairing secret", () => {
+  const active = applyStartResult(createInitialPairingState(), {
+    ok: true,
+    available: true,
+    pairingSecret: "J".repeat(43),
+    session: ACTIVE_SESSION,
+  }, NOW);
+  const busy = withSecureCoreBusy(active, true);
+
+  assert.equal(busy.secureCoreBusy, true);
+  assert.equal(busy.pairingSecret, null);
 });

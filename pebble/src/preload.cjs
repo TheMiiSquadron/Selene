@@ -68,6 +68,9 @@ contextBridge.exposeInMainWorld("novaPanel", {
   cancelPairing() {
     return ipcRenderer.invoke("nova-panel:pairing-cancel");
   },
+  startSecureCore() {
+    return ipcRenderer.invoke("nova-panel:start-secure-core");
+  },
   resizeToContent(contentHeight) {
     return ipcRenderer.invoke("nova-panel:resize-to-content", Number(contentHeight));
   },

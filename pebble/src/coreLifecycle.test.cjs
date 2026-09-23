@@ -586,6 +586,167 @@ test("pairing admin methods unwrap authenticated channel payloads only for owned
   assert.doesNotMatch(JSON.stringify(lifecycle.getOwnershipSnapshot()), /SSSS/);
 });
 
+test("Secure Core launch waits for authenticated admin channel before ready", async () => {
+  let spawned = false;
+  let child;
+  let resolveReady;
+  let ready = false;
+  const lifecycle = createCoreLifecycle({
+    fetchImpl: async () => {
+      if (spawned) return okResponse();
+      throw new Error("offline");
+    },
+    spawnImpl: (executable, args, options) => {
+      spawned = true;
+      child = new FakeChild({ pid: 7201 });
+      assert.equal(options.shell, false);
+      assert.deepEqual(options.stdio, ["ignore", "ignore", "ignore", "pipe", "ipc"]);
+      assert.deepEqual(args, [
+        path.resolve("C:/trusted/Selene/core/src/server.js"),
+        OWNED_CORE_ADMIN_IPC_ARG,
+      ]);
+      assert.equal(JSON.stringify(args).includes("secret"), false);
+      assert.equal(JSON.stringify(options).includes("secret"), false);
+      return child;
+    },
+    createCoreAdminChannel: () => ({
+      ready: new Promise((resolve) => {
+        resolveReady = () => {
+          ready = true;
+          resolve();
+        };
+      }),
+      close() {},
+      getStatus() {
+        return { state: ready ? "ready" : "authenticating", ready };
+      },
+    }),
+    launchConfiguration: {
+      executable: path.resolve("C:/trusted/node.exe"),
+      args: [path.resolve("C:/trusted/Selene/core/src/server.js")],
+      cwd: path.resolve("C:/trusted/Selene/core/src"),
+    },
+  });
+
+  const pending = lifecycle.startSecureCore();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(child.pid, 7201);
+  resolveReady();
+  const result = await pending;
+
+  assert.equal(result.ok, true);
+  assert.equal(result.state, "secure-core-ready");
+  assert.equal(lifecycle.getOwnershipSnapshot().responderOwnership, undefined);
+});
+
+test("Secure Core launch fails closed when external Core is already reachable", async () => {
+  let spawnCalls = 0;
+  const lifecycle = createCoreLifecycle({
+    fetchImpl: async () => okResponse(),
+    spawnImpl: () => {
+      spawnCalls += 1;
+      return new FakeChild();
+    },
+    launchConfiguration: {
+      executable: path.resolve("C:/trusted/node.exe"),
+      args: [path.resolve("C:/trusted/Selene/core/src/server.js")],
+      cwd: path.resolve("C:/trusted/Selene/core/src"),
+    },
+  });
+
+  const result = await lifecycle.startSecureCore();
+
+  assert.equal(result.ok, false);
+  assert.equal(result.state, "external-core");
+  assert.equal(spawnCalls, 0);
+});
+
+test("Secure Core spawn failure and authentication failure leave pairing unavailable", async () => {
+  const spawnFailed = createCoreLifecycle({
+    fetchImpl: async () => {
+      throw new Error("offline");
+    },
+    spawnImpl: () => {
+      throw new Error("spawn denied");
+    },
+    launchConfiguration: {
+      executable: path.resolve("C:/trusted/node.exe"),
+      args: [path.resolve("C:/trusted/Selene/core/src/server.js")],
+      cwd: path.resolve("C:/trusted/Selene/core/src"),
+    },
+  });
+
+  assert.equal((await spawnFailed.startSecureCore()).ok, false);
+  await assert.rejects(spawnFailed.startPairing(), /not ready/i);
+
+  let spawned = false;
+  const authFailed = createCoreLifecycle({
+    fetchImpl: async () => {
+      if (spawned) return okResponse();
+      throw new Error("offline");
+    },
+    spawnImpl: () => {
+      spawned = true;
+      return new FakeChild({ pid: 7202 });
+    },
+    createCoreAdminChannel: () => ({
+      ready: new Promise((_resolve, reject) => {
+        setImmediate(() => {
+          reject(Object.assign(new Error("bad hmac"), { code: "AUTHENTICATION_FAILED" }));
+        });
+      }),
+      close() {},
+      getStatus() {
+        return { state: "failed", ready: false };
+      },
+    }),
+    launchConfiguration: {
+      executable: path.resolve("C:/trusted/node.exe"),
+      args: [path.resolve("C:/trusted/Selene/core/src/server.js")],
+      cwd: path.resolve("C:/trusted/Selene/core/src"),
+    },
+  });
+
+  const result = await authFailed.startSecureCore();
+  assert.equal(result.ok, false);
+  assert.equal(result.state, "authentication-failed");
+  await assert.rejects(authFailed.startPairing(), /not ready/i);
+});
+
+test("Secure Core startup timeout cleanup does not adopt an external responder", async () => {
+  let child;
+  const lifecycle = createCoreLifecycle({
+    startupTimeoutMs: 5,
+    cleanupTimeoutMs: 5,
+    pollIntervalMs: 1,
+    fetchImpl: async () => {
+      throw new Error("offline");
+    },
+    spawnImpl: () => {
+      child = new FakeChild({ pid: 7203, exitOnKill: false });
+      return child;
+    },
+    createCoreAdminChannel: () => ({
+      ready: Promise.resolve(),
+      close() {},
+      getStatus() {
+        return { state: "ready", ready: true };
+      },
+    }),
+    launchConfiguration: {
+      executable: path.resolve("C:/trusted/node.exe"),
+      args: [path.resolve("C:/trusted/Selene/core/src/server.js")],
+      cwd: path.resolve("C:/trusted/Selene/core/src"),
+    },
+  });
+
+  const result = await lifecycle.startSecureCore();
+
+  assert.equal(result.ok, false);
+  assert.equal(child.killed, true);
+  assert.equal(lifecycle.getOwnershipSnapshot().owned, true);
+});
+
 test("rejects relative owned-launch paths", () => {
   assert.throws(
     () => resolveLaunchConfiguration({ nodeExecutable: "node.exe" }),

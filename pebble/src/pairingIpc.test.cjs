@@ -43,6 +43,7 @@ test("registers only narrow pairing IPC handlers", () => {
   assert.deepEqual([...ipcMain.handlers.keys()].sort(), [
     PAIRING_CHANNELS.CANCEL,
     PAIRING_CHANNELS.START,
+    PAIRING_CHANNELS.START_SECURE_CORE,
     PAIRING_CHANNELS.STATUS,
   ].sort());
 });
@@ -103,6 +104,7 @@ test("unavailable or external Core cannot start pairing through the UI bridge", 
     isAllowedSender: () => true,
     coreLifecycle: {
       getAdminChannelStatus: () => ({ state: "unavailable", ready: false }),
+      checkAvailability: async () => ({ state: "unavailable", reachable: false }),
       startPairing: async () => {
         called = true;
         return {};
@@ -114,8 +116,118 @@ test("unavailable or external Core cannot start pairing through the UI bridge", 
   const start = await ipcMain.invoke(PAIRING_CHANNELS.START, {});
 
   assert.equal(status.available, false);
+  assert.equal(status.state, "no-core");
+  assert.equal(status.canStartSecureCore, true);
   assert.equal(start.available, false);
   assert.equal(called, false);
+});
+
+test("explicit Start Secure Core invokes exactly one narrow lifecycle request", async () => {
+  const ipcMain = createFakeIpcMain();
+  let startCalls = 0;
+  registerPairingIpcHandlers({
+    ipcMain,
+    isAllowedSender: () => true,
+    coreLifecycle: {
+      getAdminChannelStatus: () => ({ state: "unavailable", ready: false }),
+      checkAvailability: async () => ({ state: "unavailable", reachable: false }),
+      startSecureCore: async () => {
+        startCalls += 1;
+        return { ok: true, state: "secure-core-ready" };
+      },
+    },
+  });
+
+  const response = await ipcMain.invoke(PAIRING_CHANNELS.START_SECURE_CORE, {});
+
+  assert.equal(startCalls, 1);
+  assert.equal(response.ok, true);
+  assert.equal(response.available, true);
+  assert.equal(response.state, "ready");
+});
+
+test("renderer cannot provide executable paths, arguments, or arbitrary lifecycle operations", async () => {
+  const ipcMain = createFakeIpcMain();
+  let startCalls = 0;
+  registerPairingIpcHandlers({
+    ipcMain,
+    isAllowedSender: () => true,
+    coreLifecycle: {
+      getAdminChannelStatus: () => ({ state: "unavailable", ready: false }),
+      checkAvailability: async () => ({ state: "unavailable", reachable: false }),
+      startSecureCore: async () => {
+        startCalls += 1;
+        return { ok: true };
+      },
+    },
+  });
+
+  const response = await ipcMain.invoke(PAIRING_CHANNELS.START_SECURE_CORE, {}, {
+    executable: "C:/untrusted/node.exe",
+    args: ["evil.js"],
+    operation: "shutdownOwnedCore",
+  });
+
+  assert.equal(response.ok, false);
+  assert.equal(response.error.code, "INVALID_PAIRING_REQUEST");
+  assert.equal(startCalls, 0);
+  assert.equal(ipcMain.handlers.has("nova-panel:lifecycle"), false);
+});
+
+test("external Core exposes Check Again only and never launches or terminates Core", async () => {
+  const ipcMain = createFakeIpcMain();
+  let startCalls = 0;
+  let shutdownCalls = 0;
+  registerPairingIpcHandlers({
+    ipcMain,
+    isAllowedSender: () => true,
+    coreLifecycle: {
+      getAdminChannelStatus: () => ({ state: "unavailable", ready: false }),
+      checkAvailability: async () => ({ state: "externally-managed", reachable: true, owned: false }),
+      startSecureCore: async () => {
+        startCalls += 1;
+        return { ok: true };
+      },
+      shutdownOwnedCore: async () => {
+        shutdownCalls += 1;
+        return {};
+      },
+    },
+  });
+
+  const status = await ipcMain.invoke(PAIRING_CHANNELS.STATUS, {});
+  const start = await ipcMain.invoke(PAIRING_CHANNELS.START_SECURE_CORE, {});
+
+  assert.equal(status.state, "external-core");
+  assert.equal(status.canStartSecureCore, false);
+  assert.equal(status.canCheckAgain, true);
+  assert.equal(start.state, "external-core");
+  assert.equal(startCalls, 0);
+  assert.equal(shutdownCalls, 0);
+});
+
+test("failed Secure Core launch remains sanitized and pairing unavailable", async () => {
+  const ipcMain = createFakeIpcMain();
+  registerPairingIpcHandlers({
+    ipcMain,
+    isAllowedSender: () => true,
+    coreLifecycle: {
+      getAdminChannelStatus: () => ({ state: "unavailable", ready: false }),
+      checkAvailability: async () => ({ state: "unavailable", reachable: false }),
+      startSecureCore: async () => ({
+        ok: false,
+        state: "authentication-failed",
+        message: "Secure Core could not establish an authenticated admin channel.",
+      }),
+    },
+  });
+
+  const response = await ipcMain.invoke(PAIRING_CHANNELS.START_SECURE_CORE, {});
+
+  assert.equal(response.ok, false);
+  assert.equal(response.available, false);
+  assert.equal(response.state, "secure-core-failed");
+  assert.doesNotMatch(JSON.stringify(response), /capability|hmac|tag|bootstrap/i);
 });
 
 test("ready authenticated channel enables explicit start without logging or status secret", async () => {
