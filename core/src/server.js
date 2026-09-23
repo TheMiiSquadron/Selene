@@ -44,6 +44,7 @@ import {
   startCoreLocalAdminChildChannel,
 } from "./localAdminChannel.js";
 import { createLocalPairingAdministration } from "./pairingAdministration.js";
+import { createPairingSessionManager } from "./pairingSessionManager.js";
 
 const HOST = "127.0.0.1";
 const PORT = 3030;
@@ -631,6 +632,32 @@ function stopRuntimeServices() {
   awarenessService.stop();
 }
 
+function createRuntimePairingComposition() {
+  const sessionManager = createPairingSessionManager();
+  const pairingAdministration = createLocalPairingAdministration({ sessionManager });
+  const pairingControls = Object.freeze({
+    getPairingStatus: pairingAdministration.getPairingStatus,
+    startPairing() {
+      return Object.freeze({
+        ok: true,
+        ...sessionManager.createSession(),
+      });
+    },
+    cancelPairing() {
+      return Object.freeze({
+        ok: true,
+        cancelled: sessionManager.cancelSession(),
+        status: pairingAdministration.getPairingStatus(),
+      });
+    },
+  });
+
+  return Object.freeze({
+    pairingAdministration,
+    pairingControls,
+  });
+}
+
 export async function startSeleneServers({
   env = process.env,
   corePort = PORT,
@@ -686,11 +713,14 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   let credentialStore;
   let localAdminChannel;
   try {
+    const { pairingAdministration, pairingControls } = createRuntimePairingComposition();
     if (process.argv.includes(OWNED_CORE_ADMIN_IPC_ARG)) {
-      localAdminChannel = startCoreLocalAdminChildChannel();
+      localAdminChannel = startCoreLocalAdminChildChannel({
+        pairingControls,
+      });
     }
     credentialStore = createGatewayCredentialStore();
-    listeners = await startSeleneServers({ credentialStore });
+    listeners = await startSeleneServers({ credentialStore, pairingAdministration });
   } catch (error) {
     localAdminChannel?.close?.();
     credentialStore?.close();

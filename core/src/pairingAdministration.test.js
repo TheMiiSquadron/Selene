@@ -89,6 +89,23 @@ test("ordinary callers cannot start pairing", () => {
   assert.equal(sessionManager.getActiveSession(), null);
 });
 
+test("ordinary construction cannot obtain trusted controls through caller options", () => {
+  let registrarCalled = false;
+  const admin = createLocalPairingAdministration({
+    trustedControlRegistrar() {
+      registrarCalled = true;
+    },
+  });
+
+  assert.equal(registrarCalled, false);
+  assert.equal(Object.hasOwn(admin, "trustedControls"), false);
+  assert.equal(Object.hasOwn(admin, "startPairingTrusted"), false);
+  assertAdminError(
+    () => admin.startPairing(),
+    "TRUSTED_PAIRING_APPROVAL_UNAVAILABLE",
+  );
+});
+
 test("ordinary callers cannot cancel pairing", () => {
   const sessionManager = createPairingSessionManager({
     generateSecret: () => fixedSecret(0x22),

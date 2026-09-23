@@ -40,8 +40,8 @@ class FakeChild extends EventEmitter {
     return true;
   }
 
-  waitForChildMessage(kind) {
-    const existing = this.sent.find((message) => message.kind === kind);
+  waitForChildMessage(kind, { afterIndex = 0 } = {}) {
+    const existing = this.sent.slice(afterIndex).find((message) => message.kind === kind);
     if (existing) return Promise.resolve(existing);
     return new Promise((resolve) => {
       const onMessage = (message) => {
@@ -179,6 +179,90 @@ test("authenticated request correlates response without invoking pairing", async
   const result = await requestPromise;
   assert.equal(result.requestId, verified.requestId);
   assert.equal(result.payload.error.code, "LOCAL_ADMIN_ACTION_UNAVAILABLE");
+});
+
+test("pairing helper methods send narrow authenticated requests and do not cache secrets in status", async () => {
+  const protocol = await import("../../core/src/localAdminProtocol.js");
+  const { channel, child, capability } = await establishChannel({ protocol });
+
+  let sentIndex = child.sent.length;
+  const startPromise = channel.startPairing();
+  const startRequest = await child.waitForChildMessage("request", { afterIndex: sentIndex });
+  const verifiedStart = protocol.verifyLocalAdminMessage(capability, startRequest.message);
+  assert.equal(verifiedStart.action, protocol.LOCAL_ADMIN_ACTIONS.PAIRING_START);
+  assert.deepEqual(verifiedStart.payload, {});
+
+  const pairingSecret = "A".repeat(43);
+  const startResponse = protocol.signLocalAdminMessage(capability, {
+    requestId: verifiedStart.requestId,
+    action: verifiedStart.action,
+    payload: {
+      ok: true,
+      pairingSecret,
+      session: { id: "pairing-1", expiresAt: "2026-09-23T00:05:00.000Z" },
+    },
+    randomBytes: sequenceRandom(bytes(0x90)),
+  });
+  child.emit("message", {
+    channel: LOCAL_ADMIN_CHANNEL_NAME,
+    kind: "response",
+    message: startResponse,
+  });
+
+  assert.equal((await startPromise).payload.pairingSecret, pairingSecret);
+  assert.doesNotMatch(JSON.stringify(channel.getStatus()), new RegExp(pairingSecret));
+
+  sentIndex = child.sent.length;
+  const statusPromise = channel.getPairingStatus();
+  const statusRequest = await child.waitForChildMessage("request", { afterIndex: sentIndex });
+  const verifiedStatus = protocol.verifyLocalAdminMessage(capability, statusRequest.message);
+  assert.equal(verifiedStatus.action, protocol.LOCAL_ADMIN_ACTIONS.PAIRING_STATUS);
+  const statusResponse = protocol.signLocalAdminMessage(capability, {
+    requestId: verifiedStatus.requestId,
+    action: verifiedStatus.action,
+    payload: { ok: true, session: null },
+    randomBytes: sequenceRandom(bytes(0x91)),
+  });
+  child.emit("message", {
+    channel: LOCAL_ADMIN_CHANNEL_NAME,
+    kind: "response",
+    message: statusResponse,
+  });
+  assert.equal((await statusPromise).payload.session, null);
+
+  sentIndex = child.sent.length;
+  const cancelPromise = channel.cancelPairing();
+  const cancelRequest = await child.waitForChildMessage("request", { afterIndex: sentIndex });
+  const verifiedCancel = protocol.verifyLocalAdminMessage(capability, cancelRequest.message);
+  assert.equal(verifiedCancel.action, protocol.LOCAL_ADMIN_ACTIONS.PAIRING_CANCEL);
+  assert.deepEqual(verifiedCancel.payload, {});
+  const cancelResponse = protocol.signLocalAdminMessage(capability, {
+    requestId: verifiedCancel.requestId,
+    action: verifiedCancel.action,
+    payload: { ok: true, cancelled: true, status: { ok: true, session: null } },
+    randomBytes: sequenceRandom(bytes(0x92)),
+  });
+  child.emit("message", {
+    channel: LOCAL_ADMIN_CHANNEL_NAME,
+    kind: "response",
+    message: cancelResponse,
+  });
+  assert.equal((await cancelPromise).payload.cancelled, true);
+});
+
+test("pairing helpers fail before ready and after close", async () => {
+  const protocol = await import("../../core/src/localAdminProtocol.js");
+  const child = new FakeChild();
+  const channel = createCoreAdminChannel({
+    child,
+    protocolModule: protocol,
+    randomBytes: sequenceRandom(bytes(0x11)),
+    handshakeTimeoutMs: 50,
+  });
+
+  await assert.rejects(channel.startPairing(), /not ready/i);
+  channel.close();
+  await assert.rejects(channel.cancelPairing(), /not ready/i);
 });
 
 test("wrong or replayed responses fail closed, unknown responses are ignored safely", async () => {

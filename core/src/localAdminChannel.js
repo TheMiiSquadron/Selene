@@ -156,6 +156,7 @@ function envelope(kind, payload = {}) {
 export function startCoreLocalAdminChildChannel({
   processObject = process,
   argv = processObject.argv,
+  pairingControls = null,
   bootstrapFd = LOCAL_ADMIN_BOOTSTRAP_FD,
   createReadStream = defaultCreateReadStream,
   bootstrapTimeoutMs = DEFAULT_BOOTSTRAP_TIMEOUT_MS,
@@ -237,6 +238,15 @@ export function startCoreLocalAdminChildChannel({
     return verifyLocalAdminMessage(capability, message, { replayGuard });
   }
 
+  function validateEmptyPayload(payload) {
+    if (!isPlainObject(payload) || Object.keys(payload).length !== 0) {
+      throw channelError(
+        "INVALID_PAYLOAD",
+        "Local admin action payload is invalid.",
+      );
+    }
+  }
+
   function sendAuthenticatedResponse({ requestId, action, payload }) {
     const response = signLocalAdminMessage(capability, {
       requestId,
@@ -245,6 +255,82 @@ export function startCoreLocalAdminChildChannel({
       randomBytes,
     });
     sendProcessMessage(processObject, envelope("response", { message: response }));
+  }
+
+  function actionUnavailable(verified) {
+    sendAuthenticatedResponse({
+      requestId: verified.requestId,
+      action: verified.action,
+      payload: {
+        ok: false,
+        error: {
+          code: "LOCAL_ADMIN_ACTION_UNAVAILABLE",
+          message: "Local admin action is not available.",
+        },
+      },
+    });
+  }
+
+  function actionError(verified, error) {
+    sendAuthenticatedResponse({
+      requestId: verified.requestId,
+      action: verified.action,
+      payload: {
+        ok: false,
+        error: {
+          code: sanitizeReason(error),
+          message: "Local admin action failed.",
+        },
+      },
+    });
+  }
+
+  function handlePairingAction(verified) {
+    try {
+      validateEmptyPayload(verified.payload);
+    } catch (error) {
+      actionError(verified, error);
+      return;
+    }
+
+    if (!pairingControls) {
+      actionUnavailable(verified);
+      return;
+    }
+
+    try {
+      if (verified.action === LOCAL_ADMIN_ACTIONS.PAIRING_STATUS) {
+        sendAuthenticatedResponse({
+          requestId: verified.requestId,
+          action: verified.action,
+          payload: pairingControls.getPairingStatus(),
+        });
+        return;
+      }
+
+      if (verified.action === LOCAL_ADMIN_ACTIONS.PAIRING_START) {
+        sendAuthenticatedResponse({
+          requestId: verified.requestId,
+          action: verified.action,
+          payload: pairingControls.startPairing(),
+        });
+        return;
+      }
+
+      if (verified.action === LOCAL_ADMIN_ACTIONS.PAIRING_CANCEL) {
+        sendAuthenticatedResponse({
+          requestId: verified.requestId,
+          action: verified.action,
+          payload: pairingControls.cancelPairing(),
+        });
+        return;
+      }
+    } catch (error) {
+      actionError(verified, error);
+      return;
+    }
+
+    actionUnavailable(verified);
   }
 
   function handleReadyRequest(message) {
@@ -261,17 +347,7 @@ export function startCoreLocalAdminChildChannel({
       return;
     }
 
-    sendAuthenticatedResponse({
-      requestId: verified.requestId,
-      action: verified.action,
-      payload: {
-        ok: false,
-        error: {
-          code: "LOCAL_ADMIN_ACTION_UNAVAILABLE",
-          message: "Local admin action is not available in this milestone.",
-        },
-      },
-    });
+    handlePairingAction(verified);
   }
 
   function handleMessage(raw) {

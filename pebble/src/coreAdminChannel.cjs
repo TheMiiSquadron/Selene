@@ -353,6 +353,15 @@ function createCoreAdminChannel({
     close,
     getStatus,
     sendRequest,
+    getPairingStatus() {
+      return sendRequest(protocol.LOCAL_ADMIN_ACTIONS.PAIRING_STATUS, {});
+    },
+    startPairing() {
+      return sendRequest(protocol.LOCAL_ADMIN_ACTIONS.PAIRING_START, {});
+    },
+    cancelPairing() {
+      return sendRequest(protocol.LOCAL_ADMIN_ACTIONS.PAIRING_CANCEL, {});
+    },
   });
 }
 
