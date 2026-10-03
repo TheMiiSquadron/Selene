@@ -200,8 +200,8 @@ private struct SeleneAppIconView: View {
                     .padding(.bottom, 8)
 
                 iconRow(
-                    title: "Selene",
-                    subtitle: "Default",
+                    title: "Black Moon",
+                    subtitle: "Obsidian - Default",
                     identifier: "default",
                     backgroundColor: Color(
                         red: 11.0 / 255.0,

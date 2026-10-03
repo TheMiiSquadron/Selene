@@ -1,8 +1,8 @@
 {
   "fill" : {
     "linear-gradient" : [
-      "display-p3:0.70980,0.10980,0.19608,1.00000",
-      "srgb:0.39608,0.03137,0.09020,1.00000"
+      "display-p3:0.70980,0.00000,0.00000,1.00000",
+      "srgb:0.62924,0.00000,0.00000,1.00000"
     ]
   },
   "groups" : [
@@ -10,7 +10,17 @@
       "layers" : [
         {
           "blend-mode" : "normal",
-          "fill" : "none",
+          "fill-specializations" : [
+            {
+              "value" : "none"
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "srgb:0.70980,0.00000,0.00000,1.00000"
+              }
+            }
+          ],
           "glass" : true,
           "hidden" : false,
           "image-name" : "moon-outline-512x512.png",
