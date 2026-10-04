@@ -58,7 +58,7 @@ struct ContentView: View {
             Spacer()
                 .frame(height: 30)
 
-            SeleneComposer(onSend: submit)
+            SeleneComposer(accent: environment.accent, onSend: submit)
 
             Spacer(minLength: 46)
         }
@@ -82,7 +82,7 @@ struct ContentView: View {
                 .padding(.vertical, 8)
             }
 
-            SeleneComposer(onSend: submit)
+            SeleneComposer(accent: environment.accent, onSend: submit)
                 .padding(.horizontal, 52)
                 .padding(.top, 18)
                 .padding(.bottom, 34)
@@ -137,13 +137,15 @@ private enum SeleneEnvironment: String, CaseIterable, Identifiable {
         }
     }
 
-    var swatch: Color {
+    var accent: Color {
         switch self {
-        case .obsidian: return Color(red: 0.38, green: 0.22, blue: 0.72)
-        case .sapphire: return Color(red: 0.08, green: 0.48, blue: 0.95)
-        case .ruby: return Color(red: 0.88, green: 0.08, blue: 0.18)
+        case .obsidian: return Color(red: 0.55, green: 0.49, blue: 1.0)
+        case .sapphire: return Color(red: 0.12, green: 0.58, blue: 1.0)
+        case .ruby: return Color(red: 1.0, green: 0.18, blue: 0.30)
         }
     }
+
+    var swatch: Color { accent }
 }
 
 private struct EnvironmentSwitcher: View {
@@ -218,6 +220,7 @@ private struct SeleneComposer: View {
     @State private var message = ""
     @FocusState private var isFocused: Bool
 
+    let accent: Color
     let onSend: (String) -> Void
 
     var body: some View {
@@ -259,14 +262,14 @@ private struct SeleneComposer: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(
                     isFocused
-                        ? Color(red: 0.55, green: 0.49, blue: 1.0).opacity(0.72)
+                        ? accent.opacity(0.72)
                         : .white.opacity(0.10),
                     lineWidth: 1
                 )
         }
         .shadow(
             color: isFocused
-                ? Color(red: 0.42, green: 0.34, blue: 1.0).opacity(0.22)
+                ? accent.opacity(0.22)
                 : .clear,
             radius: 18
         )
