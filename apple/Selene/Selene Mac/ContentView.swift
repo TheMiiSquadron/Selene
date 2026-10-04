@@ -234,27 +234,11 @@ private struct LocalMessageBubble: View {
 private struct SeleneHomeBackground: View {
     var body: some View {
         ZStack {
-            Color(red: 0.025, green: 0.027, blue: 0.045)
+            Image("SeleneObsidian")
+                .resizable()
+                .scaledToFill()
 
-            RadialGradient(
-                colors: [
-                    Color(red: 0.23, green: 0.18, blue: 0.52).opacity(0.24),
-                    .clear
-                ],
-                center: UnitPoint(x: 0.50, y: 0.28),
-                startRadius: 0,
-                endRadius: 330
-            )
-
-            RadialGradient(
-                colors: [
-                    Color(red: 0.12, green: 0.28, blue: 0.48).opacity(0.10),
-                    .clear
-                ],
-                center: UnitPoint(x: 0.82, y: 0.78),
-                startRadius: 0,
-                endRadius: 300
-            )
+            Color.black.opacity(0.28)
         }
         .ignoresSafeArea()
     }
