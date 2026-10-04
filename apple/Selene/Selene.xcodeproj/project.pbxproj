@@ -90,6 +90,7 @@
 		19B95DB23071D5CF0018CF1B /* Exceptions for "Selene" folder in "Selene Mac" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Selene.icon,
 				Views/SelenePebble.swift,
 			);
 			target = 19B95D8B3071D21C0018CF1B /* Selene Mac */;
@@ -1058,7 +1059,7 @@
 		19B95DA83071D21F0018CF1B /* Debug configuration for PBXNativeTarget "Selene Mac" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Selene;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -1092,7 +1093,7 @@
 		19B95DA93071D21F0018CF1B /* Release configuration for PBXNativeTarget "Selene Mac" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Selene;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
