@@ -1,68 +1,15 @@
 {
   "images" : [
-    {
-      "filename" : "SeleneRubyIcon-16.png",
-      "idiom" : "mac",
-      "scale" : "1x",
-      "size" : "16x16"
-    },
-    {
-      "filename" : "SeleneRubyIcon-32.png",
-      "idiom" : "mac",
-      "scale" : "2x",
-      "size" : "16x16"
-    },
-    {
-      "filename" : "SeleneRubyIcon-32.png",
-      "idiom" : "mac",
-      "scale" : "1x",
-      "size" : "32x32"
-    },
-    {
-      "filename" : "SeleneRubyIcon-64.png",
-      "idiom" : "mac",
-      "scale" : "2x",
-      "size" : "32x32"
-    },
-    {
-      "filename" : "SeleneRubyIcon-128.png",
-      "idiom" : "mac",
-      "scale" : "1x",
-      "size" : "128x128"
-    },
-    {
-      "filename" : "SeleneRubyIcon-256.png",
-      "idiom" : "mac",
-      "scale" : "2x",
-      "size" : "128x128"
-    },
-    {
-      "filename" : "SeleneRubyIcon-256.png",
-      "idiom" : "mac",
-      "scale" : "1x",
-      "size" : "256x256"
-    },
-    {
-      "filename" : "SeleneRubyIcon-512.png",
-      "idiom" : "mac",
-      "scale" : "2x",
-      "size" : "256x256"
-    },
-    {
-      "filename" : "SeleneRubyIcon-512.png",
-      "idiom" : "mac",
-      "scale" : "1x",
-      "size" : "512x512"
-    },
-    {
-      "filename" : "SeleneRubyIcon-1024.png",
-      "idiom" : "mac",
-      "scale" : "2x",
-      "size" : "512x512"
-    }
+    { "filename" : "SeleneDefaultIcon-16.png", "idiom" : "mac", "scale" : "1x", "size" : "16x16" },
+    { "filename" : "SeleneDefaultIcon-32.png", "idiom" : "mac", "scale" : "2x", "size" : "16x16" },
+    { "filename" : "SeleneDefaultIcon-32.png", "idiom" : "mac", "scale" : "1x", "size" : "32x32" },
+    { "filename" : "SeleneDefaultIcon-64.png", "idiom" : "mac", "scale" : "2x", "size" : "32x32" },
+    { "filename" : "SeleneDefaultIcon-128.png", "idiom" : "mac", "scale" : "1x", "size" : "128x128" },
+    { "filename" : "SeleneDefaultIcon-256.png", "idiom" : "mac", "scale" : "2x", "size" : "128x128" },
+    { "filename" : "SeleneDefaultIcon-256.png", "idiom" : "mac", "scale" : "1x", "size" : "256x256" },
+    { "filename" : "SeleneDefaultIcon-512.png", "idiom" : "mac", "scale" : "2x", "size" : "256x256" },
+    { "filename" : "SeleneDefaultIcon-512.png", "idiom" : "mac", "scale" : "1x", "size" : "512x512" },
+    { "filename" : "SeleneDefaultIcon-1024.png", "idiom" : "mac", "scale" : "2x", "size" : "512x512" }
   ],
-  "info" : {
-    "author" : "xcode",
-    "version" : 1
-  }
+  "info" : { "author" : "xcode", "version" : 1 }
 }
