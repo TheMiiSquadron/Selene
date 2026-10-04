@@ -45,8 +45,8 @@ struct ContentView: View {
                 accent: environment.accent
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(.leading, 14)
-            .padding(.top, 42)
+            .padding(.leading, 10)
+            .padding(.top, 28)
 
             VStack {
                 Spacer()
@@ -182,7 +182,7 @@ private struct SeleneNavigationRail: View {
                 Image(systemName: "sidebar.left")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.white.opacity(buttonHovered || isOpen ? 0.94 : 0.72))
-                    .frame(width: 34, height: 30)
+                    .frame(width: 30, height: 28)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 9, style: .continuous)
