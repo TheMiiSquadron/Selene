@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var messages: [LocalMessage] = []
+    @State private var destination: SeleneDestination = .home
+    @State private var isNavigationOpen = false
     @AppStorage("selene.environment") private var environmentRawValue = SeleneEnvironment.obsidian.rawValue
 
     private var environment: SeleneEnvironment {
@@ -15,13 +17,35 @@ struct ContentView: View {
                 .id(environment)
                 .transition(.opacity)
 
-            if messages.isEmpty {
-                restingHome
-                    .transition(.opacity.combined(with: .scale(scale: 0.985)))
-            } else {
-                conversationHome
-                    .transition(.opacity)
+            Group {
+                switch destination {
+                case .home:
+                    if messages.isEmpty {
+                        restingHome
+                            .transition(.opacity.combined(with: .scale(scale: 0.985)))
+                    } else {
+                        conversationHome
+                            .transition(.opacity)
+                    }
+                default:
+                    SelenePlaceholderDestination(destination: destination, accent: environment.accent)
+                        .transition(.opacity)
+                }
             }
+            .onTapGesture {
+                guard isNavigationOpen else { return }
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
+                    isNavigationOpen = false
+                }
+            }
+
+            SeleneNavigationRail(
+                selection: $destination,
+                isOpen: $isNavigationOpen,
+                accent: environment.accent
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .padding(.leading, 8)
 
             VStack {
                 Spacer()
@@ -115,6 +139,127 @@ struct ContentView: View {
         default:
             return "Good evening, Alex."
         }
+    }
+}
+
+private enum SeleneDestination: String, CaseIterable, Identifiable {
+    case home
+    case history
+    case activity
+    case devices
+    case settings
+
+    var id: String { rawValue }
+
+    var title: String { rawValue.capitalized }
+
+    var symbol: String {
+        switch self {
+        case .home: return "house"
+        case .history: return "clock.arrow.circlepath"
+        case .activity: return "sparkles"
+        case .devices: return "laptopcomputer.and.iphone"
+        case .settings: return "gearshape"
+        }
+    }
+}
+
+private struct SeleneNavigationRail: View {
+    @Binding var selection: SeleneDestination
+    @Binding var isOpen: Bool
+    let accent: Color
+
+    @State private var tabHovered = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if isOpen {
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(SeleneDestination.allCases) { destination in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.22)) {
+                                selection = destination
+                                isOpen = false
+                            }
+                        } label: {
+                            HStack(spacing: 11) {
+                                Image(systemName: destination.symbol)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .frame(width: 20)
+
+                                Text(destination.title)
+                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+
+                                Spacer(minLength: 8)
+                            }
+                            .foregroundStyle(.white.opacity(selection == destination ? 0.96 : 0.72))
+                            .padding(.horizontal, 12)
+                            .frame(height: 36)
+                            .background {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(selection == destination ? accent.opacity(0.22) : .clear)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .frame(width: 158)
+                .padding(8)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(.white.opacity(0.11), lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
+                .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+
+            Button {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
+                    isNavigationOpen.toggle()
+                }
+            } label: {
+                Image(systemName: isOpen ? "chevron.left" : "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white.opacity(tabHovered || isOpen ? 0.86 : 0.58))
+                    .frame(width: tabHovered ? 30 : 24, height: 54)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(.white.opacity(tabHovered || isOpen ? 0.16 : 0.08), lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .help(isOpen ? "Close navigation" : "Open navigation")
+            .onHover { hovering in
+                withAnimation(.easeOut(duration: 0.16)) {
+                    tabHovered = hovering
+                }
+            }
+        }
+        .animation(.spring(response: 0.28, dampingFraction: 0.88), value: isOpen)
+    }
+}
+
+private struct SelenePlaceholderDestination: View {
+    let destination: SeleneDestination
+    let accent: Color
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: destination.symbol)
+                .font(.system(size: 26, weight: .light))
+                .foregroundStyle(accent.opacity(0.82))
+
+            Text(destination.title)
+                .font(.system(size: 24, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.92))
+
+            Text("Coming soon")
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.44))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
