@@ -46,6 +46,20 @@
 			remoteGlobalIDString = 19900F30305915560019F9B6;
 			remoteInfo = Selene;
 		};
+		19B95D993071D21F0018CF1B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 19900F29305915560019F9B6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 19B95D8B3071D21C0018CF1B;
+			remoteInfo = "Selene Mac";
+		};
+		19B95DA33071D21F0018CF1B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 19900F29305915560019F9B6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 19B95D8B3071D21C0018CF1B;
+			remoteInfo = "Selene Mac";
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -67,9 +81,19 @@
 		19900F31305915560019F9B6 /* Selene.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Selene.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		19900F3E305915570019F9B6 /* SeleneTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SeleneTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		19900F48305915570019F9B6 /* SeleneUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SeleneUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		19B95D8C3071D21C0018CF1B /* Selene Mac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Selene Mac.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		19B95D983071D21F0018CF1B /* Selene MacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Selene MacTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		19B95DA23071D21F0018CF1B /* Selene MacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Selene MacUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		19B95DB23071D5CF0018CF1B /* Exceptions for "Selene" folder in "Selene Mac" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Views/SelenePebble.swift,
+			);
+			target = 19B95D8B3071D21C0018CF1B /* Selene Mac */;
+		};
 		A1000001305915560019F9B6 /* Exceptions for "Selene" folder in "Selene" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -99,6 +123,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				A1000001305915560019F9B6 /* Exceptions for "Selene" folder in "Selene" target */,
+				19B95DB23071D5CF0018CF1B /* Exceptions for "Selene" folder in "Selene Mac" target */,
 			);
 			path = Selene;
 			sourceTree = "<group>";
@@ -111,6 +136,21 @@
 		19900F4B305915570019F9B6 /* SeleneUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = SeleneUITests;
+			sourceTree = "<group>";
+		};
+		19B95D8D3071D21D0018CF1B /* Selene Mac */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Selene Mac";
+			sourceTree = "<group>";
+		};
+		19B95D9B3071D21F0018CF1B /* Selene MacTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Selene MacTests";
+			sourceTree = "<group>";
+		};
+		19B95DA53071D21F0018CF1B /* Selene MacUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Selene MacUITests";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -146,6 +186,21 @@
 			files = (
 			);
 		};
+		19B95D893071D21C0018CF1B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		19B95D953071D21F0018CF1B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		19B95D9F3071D21F0018CF1B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -158,6 +213,9 @@
 				190A1321306623EF001CC5B1 /* Selene Watch App Watch App */,
 				190A132F306623F1001CC5B1 /* Selene Watch App Watch AppTests */,
 				190A1339306623F1001CC5B1 /* Selene Watch App Watch AppUITests */,
+				19B95D8D3071D21D0018CF1B /* Selene Mac */,
+				19B95D9B3071D21F0018CF1B /* Selene MacTests */,
+				19B95DA53071D21F0018CF1B /* Selene MacUITests */,
 				19900F32305915560019F9B6 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -171,6 +229,9 @@
 				190A1320306623EF001CC5B1 /* Selene Watch App Watch App.app */,
 				190A132C306623F1001CC5B1 /* Selene Watch App Watch AppTests.xctest */,
 				190A1336306623F1001CC5B1 /* Selene Watch App Watch AppUITests.xctest */,
+				19B95D8C3071D21C0018CF1B /* Selene Mac.app */,
+				19B95D983071D21F0018CF1B /* Selene MacTests.xctest */,
+				19B95DA23071D21F0018CF1B /* Selene MacUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -302,6 +363,66 @@
 			productReference = 19900F48305915570019F9B6 /* SeleneUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		19B95D8B3071D21C0018CF1B /* Selene Mac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 19B95DAE3071D21F0018CF1B /* Build configuration list for PBXNativeTarget "Selene Mac" */;
+			buildPhases = (
+				19B95D883071D21C0018CF1B /* Sources */,
+				19B95D893071D21C0018CF1B /* Frameworks */,
+				19B95D8A3071D21C0018CF1B /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				19B95D8D3071D21D0018CF1B /* Selene Mac */,
+			);
+			name = "Selene Mac";
+			productName = "Selene Mac";
+			productReference = 19B95D8C3071D21C0018CF1B /* Selene Mac.app */;
+			productType = "com.apple.product-type.application";
+		};
+		19B95D973071D21F0018CF1B /* Selene MacTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 19B95DAF3071D21F0018CF1B /* Build configuration list for PBXNativeTarget "Selene MacTests" */;
+			buildPhases = (
+				19B95D943071D21F0018CF1B /* Sources */,
+				19B95D953071D21F0018CF1B /* Frameworks */,
+				19B95D963071D21F0018CF1B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				19B95D9A3071D21F0018CF1B /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				19B95D9B3071D21F0018CF1B /* Selene MacTests */,
+			);
+			name = "Selene MacTests";
+			productName = "Selene MacTests";
+			productReference = 19B95D983071D21F0018CF1B /* Selene MacTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		19B95DA13071D21F0018CF1B /* Selene MacUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 19B95DB03071D21F0018CF1B /* Build configuration list for PBXNativeTarget "Selene MacUITests" */;
+			buildPhases = (
+				19B95D9E3071D21F0018CF1B /* Sources */,
+				19B95D9F3071D21F0018CF1B /* Frameworks */,
+				19B95DA03071D21F0018CF1B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				19B95DA43071D21F0018CF1B /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				19B95DA53071D21F0018CF1B /* Selene MacUITests */,
+			);
+			name = "Selene MacUITests";
+			productName = "Selene MacUITests";
+			productReference = 19B95DA23071D21F0018CF1B /* Selene MacUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -334,6 +455,17 @@
 						CreatedOnToolsVersion = 27.0;
 						TestTargetID = 19900F30305915560019F9B6;
 					};
+					19B95D8B3071D21C0018CF1B = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					19B95D973071D21F0018CF1B = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 19B95D8B3071D21C0018CF1B;
+					};
+					19B95DA13071D21F0018CF1B = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 19B95D8B3071D21C0018CF1B;
+					};
 				};
 			};
 			buildConfigurationList = 19900F2C305915560019F9B6 /* Build configuration list for PBXProject "Selene" */;
@@ -356,6 +488,9 @@
 				190A131F306623EF001CC5B1 /* Selene Watch App Watch App */,
 				190A132B306623F1001CC5B1 /* Selene Watch App Watch AppTests */,
 				190A1335306623F1001CC5B1 /* Selene Watch App Watch AppUITests */,
+				19B95D8B3071D21C0018CF1B /* Selene Mac */,
+				19B95D973071D21F0018CF1B /* Selene MacTests */,
+				19B95DA13071D21F0018CF1B /* Selene MacUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -387,6 +522,21 @@
 			);
 		};
 		19900F46305915570019F9B6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		19B95D8A3071D21C0018CF1B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		19B95D963071D21F0018CF1B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		19B95DA03071D21F0018CF1B /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
 			);
@@ -424,6 +574,21 @@
 			files = (
 			);
 		};
+		19B95D883071D21C0018CF1B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		19B95D943071D21F0018CF1B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		19B95D9E3071D21F0018CF1B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -451,6 +616,16 @@
 			isa = PBXTargetDependency;
 			target = 19900F30305915560019F9B6 /* Selene */;
 			targetProxy = 19900F49305915570019F9B6 /* PBXContainerItemProxy */;
+		};
+		19B95D9A3071D21F0018CF1B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 19B95D8B3071D21C0018CF1B /* Selene Mac */;
+			targetProxy = 19B95D993071D21F0018CF1B /* PBXContainerItemProxy */;
+		};
+		19B95DA43071D21F0018CF1B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 19B95D8B3071D21C0018CF1B /* Selene Mac */;
+			targetProxy = 19B95DA33071D21F0018CF1B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -880,6 +1055,160 @@
 			};
 			name = Release;
 		};
+		19B95DA83071D21F0018CF1B /* Debug configuration for PBXNativeTarget "Selene Mac" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = X2TCNQXK52;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.alexmarkham.Selene-Mac";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		19B95DA93071D21F0018CF1B /* Release configuration for PBXNativeTarget "Selene Mac" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = X2TCNQXK52;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.alexmarkham.Selene-Mac";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		19B95DAA3071D21F0018CF1B /* Debug configuration for PBXNativeTarget "Selene MacTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = X2TCNQXK52;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.alexmarkham.Selene-MacTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Selene Mac.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Selene Mac";
+			};
+			name = Debug;
+		};
+		19B95DAB3071D21F0018CF1B /* Release configuration for PBXNativeTarget "Selene MacTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = X2TCNQXK52;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.alexmarkham.Selene-MacTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Selene Mac.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Selene Mac";
+			};
+			name = Release;
+		};
+		19B95DAC3071D21F0018CF1B /* Debug configuration for PBXNativeTarget "Selene MacUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = X2TCNQXK52;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.alexmarkham.Selene-MacUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = "Selene Mac";
+			};
+			name = Debug;
+		};
+		19B95DAD3071D21F0018CF1B /* Release configuration for PBXNativeTarget "Selene MacUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = X2TCNQXK52;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.alexmarkham.Selene-MacUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = "Selene Mac";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -936,6 +1265,30 @@
 			buildConfigurations = (
 				19900F57305915570019F9B6 /* Debug configuration for PBXNativeTarget "SeleneUITests" */,
 				19900F58305915570019F9B6 /* Release configuration for PBXNativeTarget "SeleneUITests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		19B95DAE3071D21F0018CF1B /* Build configuration list for PBXNativeTarget "Selene Mac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				19B95DA83071D21F0018CF1B /* Debug configuration for PBXNativeTarget "Selene Mac" */,
+				19B95DA93071D21F0018CF1B /* Release configuration for PBXNativeTarget "Selene Mac" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		19B95DAF3071D21F0018CF1B /* Build configuration list for PBXNativeTarget "Selene MacTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				19B95DAA3071D21F0018CF1B /* Debug configuration for PBXNativeTarget "Selene MacTests" */,
+				19B95DAB3071D21F0018CF1B /* Release configuration for PBXNativeTarget "Selene MacTests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		19B95DB03071D21F0018CF1B /* Build configuration list for PBXNativeTarget "Selene MacUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				19B95DAC3071D21F0018CF1B /* Debug configuration for PBXNativeTarget "Selene MacUITests" */,
+				19B95DAD3071D21F0018CF1B /* Release configuration for PBXNativeTarget "Selene MacUITests" */,
 			);
 			defaultConfigurationName = Release;
 		};
