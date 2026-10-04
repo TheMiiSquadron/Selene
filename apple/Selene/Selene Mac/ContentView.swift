@@ -180,9 +180,9 @@ private struct SeleneNavigationRail: View {
                 }
             } label: {
                 Image(systemName: "sidebar.left")
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(.white.opacity(buttonHovered || isOpen ? 0.94 : 0.72))
-                    .frame(width: 30, height: 28)
+                    .frame(width: 38, height: 34)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 9, style: .continuous)
