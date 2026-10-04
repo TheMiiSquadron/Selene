@@ -216,7 +216,7 @@ private struct SeleneNavigationRail: View {
 
             Button {
                 withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
-                    isNavigationOpen.toggle()
+                    isOpen.toggle()
                 }
             } label: {
                 Image(systemName: isOpen ? "chevron.left" : "chevron.right")
