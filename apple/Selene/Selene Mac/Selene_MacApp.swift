@@ -19,9 +19,6 @@ struct Selene_MacApp: App {
             SeleneMenuBarView()
         } label: {
             Image("MoonStars")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 22, height: 22)
         }
         .menuBarExtraStyle(.window)
     }
