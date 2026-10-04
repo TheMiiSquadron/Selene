@@ -32,11 +32,18 @@ struct ContentView: View {
                         .transition(.opacity)
                 }
             }
-            .onTapGesture {
-                guard isNavigationOpen else { return }
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
-                    isNavigationOpen = false
-                }
+
+            if isNavigationOpen {
+                Color.black
+                    .opacity(0.18)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                            isNavigationOpen = false
+                        }
+                    }
+                    .transition(.opacity)
             }
 
             SeleneNavigationRail(
@@ -173,76 +180,126 @@ private struct SeleneNavigationRail: View {
     @State private var buttonHovered = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button {
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
-                    isOpen.toggle()
-                }
-            } label: {
-                Image(systemName: "sidebar.left")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(.white.opacity(buttonHovered || isOpen ? 0.94 : 0.72))
-                    .frame(width: 38, height: 34)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .strokeBorder(
-                                isOpen ? accent.opacity(0.46) : .white.opacity(buttonHovered ? 0.18 : 0.10),
-                                lineWidth: 1
-                            )
-                    }
-                    .shadow(color: isOpen ? accent.opacity(0.16) : .black.opacity(0.12), radius: 9, y: 4)
-            }
-            .buttonStyle(.plain)
-            .help(isOpen ? "Close navigation" : "Open navigation")
-            .onHover { hovering in
-                withAnimation(.easeOut(duration: 0.16)) {
-                    buttonHovered = hovering
-                }
-            }
+        VStack(alignment: .leading, spacing: 10) {
+            navigationButton
 
             if isOpen {
-                VStack(alignment: .leading, spacing: 5) {
-                    ForEach(SeleneDestination.allCases) { destination in
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.22)) {
-                                selection = destination
-                                isOpen = false
-                            }
-                        } label: {
-                            HStack(spacing: 11) {
-                                Image(systemName: destination.symbol)
-                                    .font(.system(size: 14, weight: .medium))
-                                    .frame(width: 20)
-
-                                Text(destination.title)
-                                    .font(.system(size: 14, weight: .medium, design: .rounded))
-
-                                Spacer(minLength: 8)
-                            }
-                            .foregroundStyle(.white.opacity(selection == destination ? 0.96 : 0.72))
-                            .padding(.horizontal, 12)
-                            .frame(height: 36)
-                            .background {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(selection == destination ? accent.opacity(0.22) : .clear)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .frame(width: 158)
-                .padding(8)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(.white.opacity(0.11), lineWidth: 1)
-                }
-                .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                navigationMenu
+                    .transition(
+                        .asymmetric(
+                            insertion: .scale(scale: 0.88, anchor: .topLeading)
+                                .combined(with: .opacity),
+                            removal: .scale(scale: 0.94, anchor: .topLeading)
+                                .combined(with: .opacity)
+                        )
+                    )
             }
         }
-        .animation(.spring(response: 0.28, dampingFraction: 0.88), value: isOpen)
+    }
+
+    private var navigationButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.30, dampingFraction: 0.82)) {
+                isOpen.toggle()
+            }
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+
+                Circle()
+                    .fill(.white.opacity(buttonHovered ? 0.055 : 0.025))
+
+                Circle()
+                    .stroke(
+                        isOpen ? accent.opacity(0.34) : .white.opacity(buttonHovered ? 0.16 : 0.09),
+                        lineWidth: 1
+                    )
+
+                Image(systemName: isOpen ? "xmark" : "line.3.horizontal")
+                    .font(.system(size: isOpen ? 17 : 19, weight: .semibold))
+                    .foregroundStyle(.white.opacity(buttonHovered || isOpen ? 0.92 : 0.76))
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .frame(width: 42, height: 42)
+            .shadow(color: isOpen ? accent.opacity(0.15) : .black.opacity(0.14), radius: 10, y: 4)
+        }
+        .buttonStyle(.plain)
+        .help(isOpen ? "Close navigation" : "Open navigation")
+        .accessibilityLabel(isOpen ? "Close Selene navigation" : "Open Selene navigation")
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.16)) {
+                buttonHovered = hovering
+            }
+        }
+    }
+
+    private var navigationMenu: some View {
+        VStack(spacing: 2) {
+            ForEach(Array(SeleneDestination.allCases.enumerated()), id: \.element.id) { index, destination in
+                navigationRow(destination)
+
+                if index < SeleneDestination.allCases.count - 1 {
+                    Rectangle()
+                        .fill(.white.opacity(0.055))
+                        .frame(height: 1)
+                        .padding(.leading, 42)
+                        .padding(.trailing, 8)
+                }
+            }
+        }
+        .padding(7)
+        .frame(width: 228)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.black.opacity(0.16))
+                .allowsHitTesting(false)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(.white.opacity(0.10), lineWidth: 1)
+                .allowsHitTesting(false)
+        }
+        .shadow(color: .black.opacity(0.30), radius: 22, y: 10)
+    }
+
+    private func navigationRow(_ destination: SeleneDestination) -> some View {
+        Button {
+            selection = destination
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                isOpen = false
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: destination.symbol)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(selection == destination ? accent : .white.opacity(0.68))
+                    .frame(width: 24)
+
+                Text(destination.title)
+                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                    .foregroundStyle(selection == destination ? .white : .white.opacity(0.86))
+
+                Spacer()
+
+                if selection == destination {
+                    Circle()
+                        .fill(accent)
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 45)
+            .contentShape(Rectangle())
+            .background {
+                if selection == destination {
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .fill(accent.opacity(0.09))
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 
