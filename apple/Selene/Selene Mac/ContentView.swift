@@ -45,8 +45,8 @@ struct ContentView: View {
                 accent: environment.accent
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(.leading, 76)
-            .padding(.top, 14)
+            .padding(.leading, 14)
+            .padding(.top, 42)
 
             VStack {
                 Spacer()
