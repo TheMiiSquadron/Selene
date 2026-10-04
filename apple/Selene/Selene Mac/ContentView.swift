@@ -44,8 +44,9 @@ struct ContentView: View {
                 isOpen: $isNavigationOpen,
                 accent: environment.accent
             )
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .padding(.leading, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(.leading, 76)
+            .padding(.top, 14)
 
             VStack {
                 Spacer()
@@ -169,10 +170,37 @@ private struct SeleneNavigationRail: View {
     @Binding var isOpen: Bool
     let accent: Color
 
-    @State private var tabHovered = false
+    @State private var buttonHovered = false
 
     var body: some View {
-        HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
+                    isOpen.toggle()
+                }
+            } label: {
+                Image(systemName: "sidebar.left")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white.opacity(buttonHovered || isOpen ? 0.94 : 0.72))
+                    .frame(width: 34, height: 30)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .strokeBorder(
+                                isOpen ? accent.opacity(0.46) : .white.opacity(buttonHovered ? 0.18 : 0.10),
+                                lineWidth: 1
+                            )
+                    }
+                    .shadow(color: isOpen ? accent.opacity(0.16) : .black.opacity(0.12), radius: 9, y: 4)
+            }
+            .buttonStyle(.plain)
+            .help(isOpen ? "Close navigation" : "Open navigation")
+            .onHover { hovering in
+                withAnimation(.easeOut(duration: 0.16)) {
+                    buttonHovered = hovering
+                }
+            }
+
             if isOpen {
                 VStack(alignment: .leading, spacing: 5) {
                     ForEach(SeleneDestination.allCases) { destination in
@@ -211,30 +239,7 @@ private struct SeleneNavigationRail: View {
                         .strokeBorder(.white.opacity(0.11), lineWidth: 1)
                 }
                 .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
-                .transition(.move(edge: .leading).combined(with: .opacity))
-            }
-
-            Button {
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
-                    isOpen.toggle()
-                }
-            } label: {
-                Image(systemName: isOpen ? "chevron.left" : "chevron.right")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.white.opacity(tabHovered || isOpen ? 0.86 : 0.58))
-                    .frame(width: tabHovered ? 30 : 24, height: 54)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(.white.opacity(tabHovered || isOpen ? 0.16 : 0.08), lineWidth: 1)
-                    }
-            }
-            .buttonStyle(.plain)
-            .help(isOpen ? "Close navigation" : "Open navigation")
-            .onHover { hovering in
-                withAnimation(.easeOut(duration: 0.16)) {
-                    tabHovered = hovering
-                }
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.88), value: isOpen)
