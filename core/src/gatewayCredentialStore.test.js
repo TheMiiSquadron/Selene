@@ -97,6 +97,7 @@ test("fresh database initializes the versioned strict schema and required settin
       [
         { name: "gateway_credential_capabilities", strict: 1 },
         { name: "gateway_credentials", strict: 1 },
+        { name: "gateway_settings", strict: 1 },
       ],
     );
   } finally {
