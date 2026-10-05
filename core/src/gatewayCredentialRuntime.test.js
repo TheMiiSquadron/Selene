@@ -55,7 +55,7 @@ async function withIsolatedLocalAppData(t, operation) {
 
   return operation({
     root,
-    databasePath: resolveDefaultGatewayCredentialDatabasePath({ LOCALAPPDATA: root }),
+    databasePath: resolveDefaultGatewayCredentialDatabasePath({ LOCALAPPDATA: root }, "win32"),
   });
 }
 
