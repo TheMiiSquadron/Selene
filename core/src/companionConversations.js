@@ -3,7 +3,9 @@ import {
   ConversationStoreValidationError,
 } from "./conversationStore.js";
 
-export const COMPANION_CONVERSATION_LIST_LIMIT = 50;
+export const COMPANION_CONVERSATION_LIST_DEFAULT_LIMIT = 20;
+export const COMPANION_CONVERSATION_LIST_MAX_LIMIT = 100;
+export const COMPANION_CONVERSATION_MESSAGE_MAX_LIMIT = 200;
 
 export class CompanionConversationValidationError extends Error {
   constructor(code, message) {
@@ -31,10 +33,31 @@ function rejectUnknownKeys(value, allowed) {
     if (!allowed.has(key)) {
       throw new CompanionConversationValidationError(
         "INVALID_REQUEST",
-        `Unsupported field: ${key}.`,
+        "The request is invalid.",
       );
     }
   }
+}
+
+function parseLimit(value, { defaultLimit, maxLimit }) {
+  if (value === undefined || value === null || value === "") return defaultLimit;
+  const text = String(value);
+  if (!/^[1-9]\d*$/.test(text)) {
+    throw new CompanionConversationValidationError("INVALID_REQUEST", "The request is invalid.");
+  }
+  const limit = Number(text);
+  if (!Number.isSafeInteger(limit) || limit > maxLimit) {
+    throw new CompanionConversationValidationError("INVALID_REQUEST", "The request is invalid.");
+  }
+  return limit;
+}
+
+function validateCursor(value) {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string" || value.length > 512) {
+    throw new CompanionConversationValidationError("INVALID_REQUEST", "The request is invalid.");
+  }
+  return value;
 }
 
 function mapStoreError(error) {
@@ -47,7 +70,7 @@ function mapStoreError(error) {
   if (error instanceof ConversationStoreValidationError) {
     return new CompanionConversationValidationError(
       "INVALID_REQUEST",
-      error.message,
+      "The request is invalid.",
     );
   }
   return error;
@@ -56,47 +79,60 @@ function mapStoreError(error) {
 export function createCompanionConversationService({ conversationStore } = {}) {
   function createConversation(payload = {}) {
     const body = requireObject(payload);
-    rejectUnknownKeys(body, new Set(["title"]));
+    rejectUnknownKeys(body, new Set());
     requireStoreMethod(conversationStore, "createConversation");
 
     try {
-      const conversation = conversationStore.createConversation({
-        title: body.title ?? null,
-      });
+      const conversation = conversationStore.createConversation();
       return Object.freeze({ ok: true, conversation });
     } catch (error) {
       throw mapStoreError(error);
     }
   }
 
-  function listConversations() {
+  function listConversations({ limit, cursor } = {}) {
     requireStoreMethod(conversationStore, "listConversations");
+    const resolvedLimit = parseLimit(limit, {
+      defaultLimit: COMPANION_CONVERSATION_LIST_DEFAULT_LIMIT,
+      maxLimit: COMPANION_CONVERSATION_LIST_MAX_LIMIT,
+    });
+    validateCursor(cursor);
 
     try {
-      const conversations = conversationStore
-        .listConversations()
-        .slice(0, COMPANION_CONVERSATION_LIST_LIMIT);
+      const rows = conversationStore.listConversations();
+      const conversations = rows.slice(0, resolvedLimit);
       return Object.freeze({
         ok: true,
         conversations,
-        limit: COMPANION_CONVERSATION_LIST_LIMIT,
+        hasMore: rows.length > resolvedLimit,
       });
     } catch (error) {
       throw mapStoreError(error);
     }
   }
 
-  function getConversation(conversationId) {
+  function getConversation(conversationId, { limit, cursor } = {}) {
     requireStoreMethod(conversationStore, "getConversation");
     requireStoreMethod(conversationStore, "getMessages");
+    const resolvedLimit = parseLimit(limit, {
+      defaultLimit: COMPANION_CONVERSATION_MESSAGE_MAX_LIMIT,
+      maxLimit: COMPANION_CONVERSATION_MESSAGE_MAX_LIMIT,
+    });
+    validateCursor(cursor);
 
     try {
       const conversation = conversationStore.getConversation(conversationId);
       if (!conversation) {
         throw new ConversationNotFoundError(conversationId);
       }
-      const messages = conversationStore.getMessages(conversationId);
-      return Object.freeze({ ok: true, conversation, messages });
+      const rows = conversationStore.getMessages(conversationId);
+      const messages = rows.slice(0, resolvedLimit);
+      return Object.freeze({
+        ok: true,
+        conversation,
+        messages,
+        hasMore: rows.length > resolvedLimit,
+      });
     } catch (error) {
       throw mapStoreError(error);
     }
