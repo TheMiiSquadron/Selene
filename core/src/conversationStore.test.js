@@ -348,3 +348,69 @@ test("close is idempotent and prevents further operations", async () => {
   assert.throws(() => store.listConversations(), ConversationStoreClosedError);
   assert.throws(() => store.createConversation(), ConversationStoreClosedError);
 });
+
+
+test("completed turns persist user and assistant messages atomically with consecutive metadata", async () => {
+  const databasePath = await createTempDatabasePath();
+  const times = [
+    new Date("2026-10-05T12:00:00.000Z"),
+    new Date("2026-10-05T12:00:01.000Z"),
+    new Date("2026-10-05T12:00:02.000Z"),
+  ];
+  const store = createConversationStore({ databasePath, now: sequence(times) });
+
+  try {
+    const conversation = store.createConversation();
+    const turn = store.commitTurn(conversation.id, "Hello", "Hi there");
+
+    assert.deepEqual(
+      [turn.userMessage.sequence, turn.assistantMessage.sequence],
+      [1, 2],
+    );
+    assert.deepEqual(
+      [turn.userMessage.role, turn.assistantMessage.role],
+      ["user", "assistant"],
+    );
+    assert.deepEqual(store.getMessages(conversation.id), [
+      turn.userMessage,
+      turn.assistantMessage,
+    ]);
+    assert.equal(
+      store.getConversation(conversation.id).updatedAt,
+      turn.assistantMessage.createdAt,
+    );
+  } finally {
+    store.close();
+  }
+});
+
+test("failed completed-turn persistence rolls back both messages", async () => {
+  const databasePath = await createTempDatabasePath();
+  let store = createConversationStore({ databasePath });
+  const conversation = store.createConversation();
+  store.close();
+
+  const database = new DatabaseSync(databasePath);
+  database.exec(`
+    CREATE TRIGGER reject_assistant_turn
+    BEFORE INSERT ON messages
+    WHEN NEW.role = 'assistant'
+    BEGIN
+      SELECT RAISE(ABORT, 'forced assistant failure');
+    END;
+  `);
+  database.close();
+
+  store = createConversationStore({ databasePath });
+  try {
+    const before = store.getConversation(conversation.id);
+    assert.throws(
+      () => store.commitTurn(conversation.id, "Do not orphan me", "Failure"),
+      /forced assistant failure/,
+    );
+    assert.deepEqual(store.getMessages(conversation.id), []);
+    assert.deepEqual(store.getConversation(conversation.id), before);
+  } finally {
+    store.close();
+  }
+});
