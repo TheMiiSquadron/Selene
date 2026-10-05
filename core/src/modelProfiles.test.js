@@ -65,6 +65,9 @@ test("role-specific environment override wins over configured model", () => {
   });
 
   assert.equal(resolved.model, "env-primary-model");
+  assert.equal(resolved.apiId, "env-primary-model");
+  assert.equal(resolved.residency.modelKey, "env-primary-model");
+  assert.equal(resolved.residency.apiId, "env-primary-model");
   assert.equal(resolved.source, "env:SELENE_MODEL_PRIMARY");
 });
 
