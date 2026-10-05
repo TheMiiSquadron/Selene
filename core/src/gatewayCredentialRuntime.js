@@ -20,7 +20,11 @@ export const GATEWAY_RUNTIME_TOCTOU_LIMITATION =
 
 const APPROVED_SYSTEM_SIDS = Object.freeze(["S-1-5-18", "S-1-5-32-544"]);
 const FULL_CONTROL = 2032127;
-const CHAT_CAPABILITY = "chat";
+const HOME_CONVERSATION_CAPABILITIES = Object.freeze([
+  "chat",
+  "conversation:read",
+  "conversation:write",
+]);
 const DISPLAY_NAME_MAX_LENGTH = 80;
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 const SID_PATTERN = /^S-1-5-21-(?:\d+-){3}\d+$/u;
@@ -354,11 +358,11 @@ function validateDisplayName(displayName) {
   return value;
 }
 
-function issueChatCredential(store, { displayName }) {
+function issueHomeCredential(store, { displayName }) {
   const issued = store.issueCredential({
     homeId: `paired:${randomUUID()}`,
     displayName: validateDisplayName(displayName),
-    capabilities: [CHAT_CAPABILITY],
+    capabilities: HOME_CONVERSATION_CAPABILITIES,
   });
 
   return Object.freeze({
@@ -415,7 +419,7 @@ export function setupProductionGatewayCredentialStorage() {
 /**
  * Opens the existing production Gateway credential database for the future
  * pairing-claim path. The returned object intentionally exposes only a narrow
- * chat credential issuer and close operation, not the full store. The path is
+ * standard Home credential issuer and close operation, not the full store. The path is
  * resolved internally and must already exist. Verification is path-based before
  * node:sqlite opens the database, so the residual TOCTOU limitation documented
  * by GATEWAY_RUNTIME_TOCTOU_LIMITATION still applies.
@@ -430,7 +434,7 @@ export function openProductionGatewayCredentialIssuer() {
   return Object.freeze({
     issueChatCredentialForPairedDevice(options = {}) {
       if (closed) fail("Gateway credential issuer is closed.");
-      return issueChatCredential(store, options);
+      return issueHomeCredential(store, options);
     },
     close() {
       if (closed) return;
