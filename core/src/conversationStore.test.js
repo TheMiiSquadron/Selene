@@ -28,16 +28,19 @@ function sequence(values) {
   return () => values[Math.min(index++, values.length - 1)];
 }
 
-test("production path resolves beneath LOCALAPPDATA without opening a database", () => {
-  const localAppData = join("C:\\", "Users", "Selene", "AppData", "Local");
-  const databasePath = resolveDefaultConversationDatabasePath({ LOCALAPPDATA: localAppData });
+test("Windows production path preserves the LOCALAPPDATA conversation location", () => {
+  const localAppData = "C:\\Users\\Selene\\AppData\\Local";
+  const databasePath = resolveDefaultConversationDatabasePath(
+    { LOCALAPPDATA: localAppData },
+    "win32",
+  );
 
   assert.equal(
     databasePath,
-    join(localAppData, "Selene", "data", "conversations.sqlite3"),
+    "C:\\Users\\Selene\\AppData\\Local\\Selene\\data\\conversations.sqlite3",
   );
   assert.throws(
-    () => resolveDefaultConversationDatabasePath({}),
+    () => resolveDefaultConversationDatabasePath({}, "win32"),
     ConversationStoreValidationError,
   );
 });
