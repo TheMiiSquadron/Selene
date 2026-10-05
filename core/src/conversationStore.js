@@ -241,7 +241,16 @@ export function createConversationStore({
   const listConversationRows = database.prepare(`
     SELECT id, title, created_at, updated_at
     FROM conversations
-    ORDER BY updated_at DESC, created_at DESC, id DESC
+    ORDER BY updated_at DESC, id DESC
+    LIMIT ?
+  `);
+  const listConversationRowsAfter = database.prepare(`
+    SELECT id, title, created_at, updated_at
+    FROM conversations
+    WHERE updated_at < ?
+       OR (updated_at = ? AND id < ?)
+    ORDER BY updated_at DESC, id DESC
+    LIMIT ?
   `);
   const insertConversation = database.prepare(`
     INSERT INTO conversations (id, title, created_at, updated_at)
@@ -252,6 +261,7 @@ export function createConversationStore({
     FROM messages
     WHERE conversation_id = ?
     ORDER BY sequence ASC
+    LIMIT ?
   `);
   const selectNextSequence = database.prepare(`
     SELECT COALESCE(MAX(sequence), 0) + 1 AS sequence
@@ -322,9 +332,26 @@ export function createConversationStore({
     return mapConversation(selectConversation.get(id));
   }
 
-  function listConversations() {
+  function listConversations({ limit, after = null } = {}) {
     ensureOpen();
-    return listConversationRows.all().map(mapConversation);
+    if (!Number.isSafeInteger(limit) || limit < 1) {
+      throw new ConversationStoreValidationError("Conversation list limit must be a positive integer.");
+    }
+    if (after === null) {
+      return listConversationRows.all(limit).map(mapConversation);
+    }
+    if (
+      !after
+      || typeof after !== "object"
+      || typeof after.updatedAt !== "string"
+      || !Number.isFinite(Date.parse(after.updatedAt))
+    ) {
+      throw new ConversationStoreValidationError("Conversation list cursor is invalid.");
+    }
+    const id = validateConversationId(after.id);
+    return listConversationRowsAfter
+      .all(after.updatedAt, after.updatedAt, id, limit)
+      .map(mapConversation);
   }
 
   function insertMessage(conversationId, content, role) {
@@ -434,13 +461,16 @@ export function createConversationStore({
     return insertMessage(conversationId, content, "assistant");
   }
 
-  function getMessages(conversationId) {
+  function getMessages(conversationId, { limit = 201 } = {}) {
     ensureOpen();
     const id = validateConversationId(conversationId);
+    if (!Number.isSafeInteger(limit) || limit < 1) {
+      throw new ConversationStoreValidationError("Message limit must be a positive integer.");
+    }
     if (!selectConversation.get(id)) {
       throw new ConversationNotFoundError(id);
     }
-    return selectMessages.all(id).map(mapMessage);
+    return selectMessages.all(id, limit).map(mapMessage);
   }
 
   function close() {
