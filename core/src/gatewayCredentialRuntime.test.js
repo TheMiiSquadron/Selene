@@ -405,12 +405,15 @@ test("narrow runtime issuer does not expose full store operations or caller-cont
         displayName: "  Alex's iPhone  ",
         id: "caller-selected-id",
         homeId: "caller-selected-home",
+        ownerId: "00000000-0000-4000-8000-000000000999",
         capabilities: ["conversation:read", "conversation:write"],
         createdAt: "2001-01-01T00:00:00.000Z",
       });
 
       assert.match(issued.bearerCredential, SECRET_PATTERN);
       assert.notEqual(issued.credential.homeId, "caller-selected-home");
+      assert.notEqual(issued.credential.ownerId, "00000000-0000-4000-8000-000000000999");
+      assert.match(issued.credential.ownerId, /^[0-9a-f-]{36}$/u);
       assert.match(issued.credential.homeId, /^paired:[0-9a-f-]{36}$/u);
       assert.equal(issued.credential.displayName, "Alex's iPhone");
       assert.deepEqual(issued.credential.capabilities, ["chat", "conversation:read", "conversation:write"]);
