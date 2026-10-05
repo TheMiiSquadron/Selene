@@ -37,7 +37,10 @@ const SECRET_PATTERN = /selene_gateway_v1\.[0-9a-f-]{36}\.[A-Za-z0-9_-]{43}/u;
 function requireWindows(t) {
   if (process.platform !== "win32") {
     t.skip("Gateway credential runtime ACL verification is Windows-specific.");
+    return false;
   }
+
+  return true;
 }
 
 async function withIsolatedLocalAppData(t, operation) {
@@ -141,7 +144,7 @@ async function ensureSidecarFile(sidecarPath) {
 }
 
 test("explicit setup creates a reusable restricted production-style database", async (t) => {
-  requireWindows(t);
+  if (!requireWindows(t)) return;
   await withIsolatedLocalAppData(t, ({ databasePath }) => {
     const first = setupProductionGatewayCredentialStorage();
     assert.equal(first.ok, true);
@@ -174,7 +177,7 @@ test("explicit setup creates a reusable restricted production-style database", a
 });
 
 test("runtime opening accepts inherited restricted SQLite sidecar ACLs", async (t) => {
-  requireWindows(t);
+  if (!requireWindows(t)) return;
   await withIsolatedLocalAppData(t, ({ databasePath }) => {
     setupProductionGatewayCredentialStorage();
     const heldStore = createGatewayCredentialStore({ databasePath });
@@ -196,7 +199,7 @@ test("runtime opening accepts inherited restricted SQLite sidecar ACLs", async (
 });
 
 test("runtime opening rejects inherited sidecars with unexpected principals or rules", async (t) => {
-  requireWindows(t);
+  if (!requireWindows(t)) return;
   await withIsolatedLocalAppData(t, async ({ databasePath }) => {
     setupProductionGatewayCredentialStorage();
     const sidecar = `${databasePath}-wal`;
@@ -214,7 +217,7 @@ test("runtime opening rejects inherited sidecars with unexpected principals or r
 });
 
 test("runtime opening rejects inherited sidecars with deny or non-FullControl rules", async (t) => {
-  requireWindows(t);
+  if (!requireWindows(t)) return;
   await withIsolatedLocalAppData(t, async ({ databasePath }) => {
     setupProductionGatewayCredentialStorage();
     const deniedSidecar = `${databasePath}-wal`;
@@ -246,7 +249,7 @@ test("runtime opening rejects inherited sidecars with deny or non-FullControl ru
 });
 
 test("runtime opening keeps strict security directory and main database ACL policy", async (t) => {
-  requireWindows(t);
+  if (!requireWindows(t)) return;
   await withIsolatedLocalAppData(t, ({ databasePath }) => {
     const store = createGatewayCredentialStore({ databasePath });
     store.close();
@@ -266,7 +269,7 @@ test("runtime opening keeps strict security directory and main database ACL poli
 });
 
 test("runtime opening rejects missing directory and missing database without creating them", async (t) => {
-  requireWindows(t);
+  if (!requireWindows(t)) return;
   await withIsolatedLocalAppData(t, async ({ databasePath }) => {
     assert.throws(
       () => openProductionGatewayCredentialIssuer(),
@@ -283,7 +286,7 @@ test("runtime opening rejects missing directory and missing database without cre
   });
 });
 test("runtime opening rejects invalid ACLs before exposing an issuer", async (t) => {
-  requireWindows(t);
+  if (!requireWindows(t)) return;
   await withIsolatedLocalAppData(t, ({ databasePath }) => {
     const store = createGatewayCredentialStore({ databasePath });
     store.close();
@@ -295,7 +298,7 @@ test("runtime opening rejects invalid ACLs before exposing an issuer", async (t)
   });
 });
 test("runtime opening rejects unsupported schemas and unsafe sidecars", async (t) => {
-  requireWindows(t);
+  if (!requireWindows(t)) return;
   await withIsolatedLocalAppData(t, async ({ databasePath }) => {
     setupProductionGatewayCredentialStorage();
 
@@ -322,7 +325,7 @@ test("runtime opening rejects unsupported schemas and unsafe sidecars", async (t
 });
 
 test("runtime opening rejects detectable symbolic database substitution", async (t) => {
-  requireWindows(t);
+  if (!requireWindows(t)) return;
   await withIsolatedLocalAppData(t, async ({ databasePath }) => {
     setupProductionGatewayCredentialStorage();
     const target = join(tmpdir(), `selene-gateway-runtime-link-target-${randomUUID()}.sqlite3`);
@@ -353,7 +356,7 @@ test("runtime opening rejects detectable symbolic database substitution", async 
 });
 
 test("runtime opening rejects detectable symbolic sidecar substitution", async (t) => {
-  requireWindows(t);
+  if (!requireWindows(t)) return;
   await withIsolatedLocalAppData(t, async ({ databasePath }) => {
     setupProductionGatewayCredentialStorage();
     const sidecar = `${databasePath}-wal`;
@@ -385,7 +388,7 @@ test("runtime opening rejects detectable symbolic sidecar substitution", async (
 });
 
 test("narrow runtime issuer does not expose full store operations or caller-controlled authority", async (t) => {
-  requireWindows(t);
+  if (!requireWindows(t)) return;
   await withIsolatedLocalAppData(t, ({ databasePath }) => {
     setupProductionGatewayCredentialStorage();
     const issuer = openProductionGatewayCredentialIssuer();
@@ -427,7 +430,7 @@ test("narrow runtime issuer does not expose full store operations or caller-cont
 });
 
 test("display names are bounded metadata and credential secrets are not persisted in public fields", async (t) => {
-  requireWindows(t);
+  if (!requireWindows(t)) return;
   await withIsolatedLocalAppData(t, ({ databasePath }) => {
     setupProductionGatewayCredentialStorage();
     const issuer = openProductionGatewayCredentialIssuer();
@@ -474,7 +477,7 @@ test("display names are bounded metadata and credential secrets are not persiste
 });
 
 test("storage status is safe and production provisioning issue/revoke stay disabled", async (t) => {
-  requireWindows(t);
+  if (!requireWindows(t)) return;
   await withIsolatedLocalAppData(t, () => {
     const unavailable = getProductionGatewayCredentialStorageStatus();
     assert.equal(unavailable.ok, false);
