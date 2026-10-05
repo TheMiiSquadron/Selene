@@ -355,3 +355,40 @@ test("unknown roles fail closed before lms load", async () => {
 
   assert.equal(lms.calls.length, 0);
 });
+
+
+test("role environment overrides control residency without changing committed profiles", async () => {
+  const env = {
+    SELENE_MODEL_FAST: "qwen/qwen3.5-4b",
+    SELENE_MODEL_PRIMARY: "qwen/qwen3.5-4b",
+  };
+  const lms = createMockLms([
+    {
+      identifier: "qwen/qwen3.5-4b",
+      modelKey: "qwen/qwen3.5-4b",
+    },
+  ]);
+  const manager = createModelManager({
+    loadProfiles: async () => profiles,
+    runLms: lms.runLms,
+    env,
+  });
+
+  const fast = await manager.ensureRoleReady("fast");
+  assert.equal(fast.profile.modelKey, "qwen/qwen3.5-4b");
+  assert.equal(fast.profile.apiId, "qwen/qwen3.5-4b");
+  assert.equal(fast.modelAlreadyLoaded, true);
+
+  const response = await manager.runWithRoleReady("primary", async ({ profile }) => {
+    assert.equal(profile.modelKey, "qwen/qwen3.5-4b");
+    assert.equal(profile.apiId, "qwen/qwen3.5-4b");
+    return "generated";
+  });
+
+  assert.equal(response.result, "generated");
+  assert.equal(lms.calls.filter((args) => args[0] === "load").length, 0);
+  assert.equal(lms.calls.filter((args) => args[0] === "unload").length, 0);
+
+  assert.equal(profiles.roles.fast.model, "google/gemma-4-26b-a4b");
+  assert.equal(profiles.roles.primary.model, "meta/muse-glimmer");
+});
