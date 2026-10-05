@@ -9,7 +9,7 @@ import {
 } from "./companionConversations.js";
 
 const ID = "00000000-0000-4000-8000-000000000001";
-const OWNER_ID = OWNER_ID;
+const OWNER_ID = "00000000-0000-4000-8000-0000000000aa";
 
 test("conversation service exposes its operations", () => {
   const service = createCompanionConversationService({ conversationStore: {} });
