@@ -8,6 +8,11 @@ import {
   CompanionChatValidationError,
   handleCompanionChat,
 } from "./companionChat.js";
+import {
+  CompanionConversationValidationError,
+  createCompanionConversationService,
+} from "./companionConversations.js";
+import { createConversationStore } from "./conversationStore.js";
 
 export const COMPANION_HOST = "127.0.0.1";
 export const COMPANION_LAN_HOST = "0.0.0.0";
@@ -185,11 +190,11 @@ function bearerCredential(request) {
   return match?.[1] ?? null;
 }
 
-function authorizeChat(request, response, credentialStore) {
+function authenticateRequest(request, response, credentialStore) {
   const credential = bearerCredential(request);
   if (!credential) {
     sendError(request, response, 401, "UNAUTHORIZED", "Authentication required.");
-    return false;
+    return null;
   }
   try {
     if (typeof credentialStore?.authenticateCredential !== "function") {
@@ -199,15 +204,21 @@ function authorizeChat(request, response, credentialStore) {
     if (!identity || !Array.isArray(identity.capabilities)) {
       throw new Error("Invalid Gateway identity.");
     }
-    if (!identity.capabilities.includes("chat")) {
-      sendError(request, response, 403, "FORBIDDEN", "Chat access denied.");
-      return false;
-    }
-    return true;
+    return identity;
   } catch {
     sendError(request, response, 401, "UNAUTHORIZED", "Authentication required.");
+    return null;
+  }
+}
+
+function authorizeChat(request, response, credentialStore) {
+  const identity = authenticateRequest(request, response, credentialStore);
+  if (!identity) return false;
+  if (!identity.capabilities.includes("chat")) {
+    sendError(request, response, 403, "FORBIDDEN", "Chat access denied.");
     return false;
   }
+  return true;
 }
 
 function isJsonContentType(request) {
@@ -305,6 +316,67 @@ async function handleChat(request, response, chatHandler) {
   }
 }
 
+function sendConversationError(request, response, error) {
+  if (error instanceof CompanionConversationValidationError) {
+    const statusCode = error.code === "CONVERSATION_NOT_FOUND" ? 404 : 400;
+    sendNoStoreError(request, response, statusCode, error.code, error.message);
+    return;
+  }
+  sendNoStoreError(
+    request,
+    response,
+    500,
+    "CONVERSATION_FAILED",
+    "Conversation request failed.",
+  );
+}
+
+async function handleCreateConversation(request, response, conversationService) {
+  if (!isJsonContentType(request)) {
+    sendNoStoreError(
+      request,
+      response,
+      415,
+      "UNSUPPORTED_CONTENT_TYPE",
+      "Content-Type must be application/json.",
+    );
+    return;
+  }
+  let payload;
+  try {
+    payload = await readJsonBody(request);
+  } catch {
+    sendNoStoreError(request, response, 400, "INVALID_REQUEST", "Invalid conversation request.");
+    return;
+  }
+  try {
+    sendNoStoreJson(request, response, 201, conversationService.createConversation(payload));
+  } catch (error) {
+    sendConversationError(request, response, error);
+  }
+}
+
+function handleListConversations(request, response, conversationService) {
+  try {
+    sendNoStoreJson(request, response, 200, conversationService.listConversations());
+  } catch (error) {
+    sendConversationError(request, response, error);
+  }
+}
+
+function handleGetConversation(request, response, conversationService, conversationId) {
+  try {
+    sendNoStoreJson(
+      request,
+      response,
+      200,
+      conversationService.getConversation(conversationId),
+    );
+  } catch (error) {
+    sendConversationError(request, response, error);
+  }
+}
+
 async function handlePairingClaim(request, response, pairingClaimService) {
   const noStore = { "Cache-Control": "no-store" };
 
@@ -369,8 +441,22 @@ export function createCompanionServer({
   chatHandler = handleCompanionChat,
   credentialStore = null,
   pairingClaimService = null,
+  conversationService = null,
+  conversationStore = null,
   tlsOptions = null,
 } = {}) {
+  let resolvedConversationService = conversationService;
+  let ownedConversationStore = null;
+
+  function getConversationService() {
+    if (resolvedConversationService) return resolvedConversationService;
+    const store = conversationStore ?? (ownedConversationStore = createConversationStore());
+    resolvedConversationService = createCompanionConversationService({
+      conversationStore: store,
+    });
+    return resolvedConversationService;
+  }
+
   const handler = async (request, response) => {
     const url = new URL(request.url ?? "/", `http://${host}:${port}`);
 
@@ -405,6 +491,42 @@ export function createCompanionServer({
       return;
     }
 
+    const conversationMatch = url.pathname.match(/^\/api\/conversations\/([^/]+)$/);
+    if (url.pathname === "/api/conversations" || conversationMatch) {
+      if (!request.socket.encrypted) {
+        sendNoStoreError(request, response, 426, "HTTPS_REQUIRED", "HTTPS is required.");
+        return;
+      }
+      if (!authenticateRequest(request, response, credentialStore)) return;
+
+      if (request.method === "POST" && url.pathname === "/api/conversations") {
+        await handleCreateConversation(request, response, getConversationService());
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/api/conversations") {
+        handleListConversations(request, response, getConversationService());
+        return;
+      }
+      if (request.method === "GET" && conversationMatch) {
+        handleGetConversation(
+          request,
+          response,
+          getConversationService(),
+          decodeURIComponent(conversationMatch[1]),
+        );
+        return;
+      }
+
+      sendNoStoreError(
+        request,
+        response,
+        405,
+        "METHOD_NOT_ALLOWED",
+        "Unsupported conversation operation.",
+      );
+      return;
+    }
+
     if (request.method === "POST" && url.pathname === "/api/pairing/claim") {
       await handlePairingClaim(request, response, pairingClaimService);
       return;
@@ -427,9 +549,14 @@ export function createCompanionServer({
     });
   };
 
-  return tlsOptions
+  const server = tlsOptions
     ? https.createServer(tlsOptions, handler)
     : http.createServer(handler);
+  server.once("close", () => {
+    ownedConversationStore?.close?.();
+    ownedConversationStore = null;
+  });
+  return server;
 }
 
 export function startCompanionServer({
