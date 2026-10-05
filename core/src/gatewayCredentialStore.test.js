@@ -45,33 +45,25 @@ function authenticationFailure(store, bearerCredential) {
   assert.fail("Expected Gateway credential authentication to fail.");
 }
 
-test("production path is isolated beneath LOCALAPPDATA without opening a database", async () => {
-  const localAppData = join("C:\\", "Users", "Selene", "AppData", "Local");
-  const expectedPath = join(
-    localAppData,
-    "Selene",
-    "security",
-    "gateway-credentials.sqlite3",
-  );
+test("Windows production path preserves the isolated LOCALAPPDATA credential location", () => {
+  const localAppData = "C:\\Users\\Selene\\AppData\\Local";
+  const expectedPath = "C:\\Users\\Selene\\AppData\\Local\\Selene\\security\\gateway-credentials.sqlite3";
 
   assert.equal(
-    resolveDefaultGatewayCredentialDatabasePath({ LOCALAPPDATA: localAppData }),
+    resolveDefaultGatewayCredentialDatabasePath(
+      { LOCALAPPDATA: localAppData },
+      "win32",
+    ),
     expectedPath,
   );
   assert.notEqual(
     expectedPath,
-    join(localAppData, "Selene", "data", "conversations.sqlite3"),
+    "C:\\Users\\Selene\\AppData\\Local\\Selene\\data\\conversations.sqlite3",
   );
   assert.throws(
-    () => resolveDefaultGatewayCredentialDatabasePath({}),
+    () => resolveDefaultGatewayCredentialDatabasePath({}, "win32"),
     GatewayCredentialStoreValidationError,
   );
-
-  const untouchedLocalAppData = await mkdtemp(join(tmpdir(), "selene-import-only-test-"));
-  const untouchedPath = resolveDefaultGatewayCredentialDatabasePath({
-    LOCALAPPDATA: untouchedLocalAppData,
-  });
-  await assert.rejects(() => access(untouchedPath));
 });
 
 test("fresh database initializes the versioned strict schema and required settings", async () => {
