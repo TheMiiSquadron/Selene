@@ -1453,3 +1453,47 @@ test("Persistent message route maps turn failures to stable sanitized errors", a
     await close(failingServer);
   }
 });
+
+
+test("Conversation retrieval rejects unknown query parameters and malformed encoded IDs", async () => {
+  const conversationService = {
+    listConversations() {
+      return { ok: true, conversations: [], hasMore: false, nextCursor: null };
+    },
+    getConversation() {
+      return { ok: true, conversation: {}, messages: [] };
+    },
+  };
+  const server = createCompanionServer({ conversationService });
+  const port = await listen(server);
+  const headers = { Authorization: `Bearer ${TEST_BEARER}` };
+
+  try {
+    const unknownListQuery = await request({
+      port,
+      path: "/api/conversations?unexpected=1",
+      headers,
+    });
+    assert.equal(unknownListQuery.statusCode, 400);
+    assert.equal(JSON.parse(unknownListQuery.body).error.code, "INVALID_REQUEST");
+
+    const conversationId = "00000000-0000-4000-8000-000000000001";
+    const retrievalQuery = await request({
+      port,
+      path: `/api/conversations/${conversationId}?limit=20`,
+      headers,
+    });
+    assert.equal(retrievalQuery.statusCode, 400);
+    assert.equal(JSON.parse(retrievalQuery.body).error.code, "INVALID_REQUEST");
+
+    const malformedId = await request({
+      port,
+      path: "/api/conversations/%E0%A4%A",
+      headers,
+    });
+    assert.equal(malformedId.statusCode, 400);
+    assert.equal(JSON.parse(malformedId.body).error.code, "INVALID_REQUEST");
+  } finally {
+    await close(server);
+  }
+});
