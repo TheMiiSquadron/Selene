@@ -59,12 +59,36 @@ function parseLimit(value, { defaultLimit, maxLimit }) {
   return limit;
 }
 
+function encodeCursor(conversation) {
+  return Buffer.from(JSON.stringify({
+    updatedAt: conversation.updatedAt,
+    id: conversation.id,
+  }), "utf8").toString("base64url");
+}
+
 function validateCursor(value) {
   if (value === undefined || value === null || value === "") return null;
-  if (typeof value !== "string" || value.length > 512) {
+  if (typeof value !== "string" || value.length > 512 || !/^[A-Za-z0-9_-]+$/.test(value)) {
     throw new CompanionConversationValidationError("INVALID_REQUEST", "The request is invalid.");
   }
-  return value;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+    if (
+      !parsed
+      || typeof parsed !== "object"
+      || Array.isArray(parsed)
+      || Object.keys(parsed).sort().join(",") !== "id,updatedAt"
+      || typeof parsed.updatedAt !== "string"
+      || !Number.isFinite(Date.parse(parsed.updatedAt))
+      || typeof parsed.id !== "string"
+      || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parsed.id)
+    ) {
+      throw new Error();
+    }
+    return { updatedAt: parsed.updatedAt, id: parsed.id.toLowerCase() };
+  } catch {
+    throw new CompanionConversationValidationError("INVALID_REQUEST", "The request is invalid.");
+  }
 }
 
 function validateTurnPayload(payload) {
@@ -153,15 +177,20 @@ export function createCompanionConversationService({
       defaultLimit: COMPANION_CONVERSATION_LIST_DEFAULT_LIMIT,
       maxLimit: COMPANION_CONVERSATION_LIST_MAX_LIMIT,
     });
-    validateCursor(cursor);
+    const after = validateCursor(cursor);
 
     try {
-      const rows = conversationStore.listConversations();
+      const rows = conversationStore.listConversations({
+        limit: resolvedLimit + 1,
+        after,
+      });
+      const hasMore = rows.length > resolvedLimit;
       const conversations = rows.slice(0, resolvedLimit);
       return Object.freeze({
         ok: true,
         conversations,
-        hasMore: rows.length > resolvedLimit,
+        hasMore,
+        nextCursor: hasMore ? encodeCursor(conversations.at(-1)) : null,
       });
     } catch (error) {
       throw mapStoreError(error);
@@ -171,24 +200,28 @@ export function createCompanionConversationService({
   function getConversation(conversationId, { limit, cursor } = {}) {
     requireStoreMethod(conversationStore, "getConversation");
     requireStoreMethod(conversationStore, "getMessages");
-    const resolvedLimit = parseLimit(limit, {
-      defaultLimit: COMPANION_CONVERSATION_MESSAGE_MAX_LIMIT,
-      maxLimit: COMPANION_CONVERSATION_MESSAGE_MAX_LIMIT,
-    });
-    validateCursor(cursor);
+    if (limit !== undefined || cursor !== undefined) {
+      throw new CompanionConversationValidationError("INVALID_REQUEST", "The request is invalid.");
+    }
 
     try {
       const conversation = conversationStore.getConversation(conversationId);
       if (!conversation) {
         throw new ConversationNotFoundError(conversationId);
       }
-      const rows = conversationStore.getMessages(conversationId);
-      const messages = rows.slice(0, resolvedLimit);
+      const messages = conversationStore.getMessages(conversationId, {
+        limit: COMPANION_CONVERSATION_MESSAGE_MAX_LIMIT + 1,
+      });
+      if (messages.length > COMPANION_CONVERSATION_MESSAGE_MAX_LIMIT) {
+        throw new CompanionConversationValidationError(
+          "CONTEXT_LIMIT_EXCEEDED",
+          "Conversation context limit exceeded.",
+        );
+      }
       return Object.freeze({
         ok: true,
         conversation,
         messages,
-        hasMore: rows.length > resolvedLimit,
       });
     } catch (error) {
       throw mapStoreError(error);
