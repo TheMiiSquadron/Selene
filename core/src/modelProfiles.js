@@ -132,16 +132,24 @@ export function resolveModelProfile({
     throw new ModelProfileError(`Model role "${normalizedRole}" does not resolve to a model.`);
   }
 
+  const source = envOverride
+    ? `env:SELENE_MODEL_${normalizedRole.toUpperCase()}`
+    : configuredModel
+      ? "config"
+      : "fallback";
+
   return {
     role: normalizedRole,
     model,
-    apiId: profile.apiId || model,
-    residency: { ...profile.residency },
+    apiId: envOverride ? model : profile.apiId || model,
+    residency: {
+      ...profile.residency,
+      ...(envOverride ? {
+        modelKey: model,
+        apiId: model,
+      } : {}),
+    },
     settings: { ...profile.settings },
-    source: envOverride
-      ? `env:SELENE_MODEL_${normalizedRole.toUpperCase()}`
-      : configuredModel
-        ? "config"
-        : "fallback",
+    source,
   };
 }
