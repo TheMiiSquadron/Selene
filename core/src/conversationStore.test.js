@@ -356,6 +356,58 @@ test("invalid inputs and unknown conversations fail explicitly", async () => {
   }
 });
 
+test("owner namespaces isolate discovery, reads, writes, and pagination", async () => {
+  const databasePath = await createTempDatabasePath();
+  const ownerA = PRIMARY_OWNER_ID;
+  const ownerB = "00000000-0000-4000-8000-0000000000bb";
+  const store = createConversationStore({ primaryOwnerId: ownerA, databasePath });
+
+  try {
+    const a1 = store.createConversation(ownerA, { title: "A one" });
+    const a2 = store.createConversation(ownerA, { title: "A two" });
+    const b1 = store.createConversation(ownerB, { title: "B one" });
+    store.addUserMessage(ownerA, a1.id, "Owner A private message");
+
+    assert.deepEqual(
+      store.listConversations(ownerA, { limit: 10 }).map(({ id }) => id).sort(),
+      [a1.id, a2.id].sort(),
+    );
+    assert.deepEqual(
+      store.listConversations(ownerB, { limit: 10 }).map(({ id }) => id),
+      [b1.id],
+    );
+
+    const firstA = store.listConversations(ownerA, { limit: 1 });
+    const secondA = store.listConversations(ownerA, {
+      limit: 10,
+      after: { updatedAt: firstA[0].updatedAt, id: firstA[0].id },
+    });
+    assert.equal(secondA.length, 1);
+    assert.notEqual(secondA[0].id, b1.id);
+
+    assert.equal(store.getConversation(ownerB, a1.id), null);
+    assert.throws(
+      () => store.getMessages(ownerB, a1.id),
+      ConversationNotFoundError,
+    );
+    assert.throws(
+      () => store.addUserMessage(ownerB, a1.id, "Intrusion"),
+      ConversationNotFoundError,
+    );
+    assert.throws(
+      () => store.commitTurn(ownerB, a1.id, "Intrusion", "Should not persist"),
+      ConversationNotFoundError,
+    );
+
+    assert.deepEqual(
+      store.getMessages(ownerA, a1.id).map(({ content }) => content),
+      ["Owner A private message"],
+    );
+  } finally {
+    store.close();
+  }
+});
+
 test("future schema versions are rejected without modifying their data", async () => {
   const databasePath = await createTempDatabasePath();
   let database = new DatabaseSync(databasePath);
