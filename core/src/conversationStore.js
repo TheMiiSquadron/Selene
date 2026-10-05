@@ -151,6 +151,136 @@ function readSchemaVersion(database) {
   return Number(database.prepare("PRAGMA user_version").get().user_version);
 }
 
+function assertConversationTableShape(database, tableName, expected) {
+  const rows = database.prepare(`PRAGMA table_info(${tableName})`).all()
+    .map(({ name, type, notnull, pk }) => ({ name, type, notnull, pk }));
+  if (JSON.stringify(rows) !== JSON.stringify(expected)) {
+    throw new ConversationStoreSchemaError(
+      `Conversation database schema has an incompatible ${tableName} table.`,
+      readSchemaVersion(database),
+    );
+  }
+}
+
+function assertConversationIndex(database, tableName, indexName, expectedColumns) {
+  const indexes = database.prepare(`PRAGMA index_list(${tableName})`).all();
+  if (!indexes.some(({ name }) => name === indexName)) {
+    throw new ConversationStoreSchemaError(
+      `Conversation database schema is missing ${indexName}.`,
+      readSchemaVersion(database),
+    );
+  }
+  const columns = database.prepare(`PRAGMA index_xinfo(${indexName})`).all()
+    .filter(({ key }) => key === 1)
+    .map(({ name, desc }) => ({ name, descending: desc }));
+  if (JSON.stringify(columns) !== JSON.stringify(expectedColumns)) {
+    throw new ConversationStoreSchemaError(
+      `Conversation database schema has an incompatible ${indexName}.`,
+      readSchemaVersion(database),
+    );
+  }
+}
+
+function verifyVersion1Schema(database) {
+  assertConversationTableShape(database, "conversations", [
+    { name: "id", type: "TEXT", notnull: 1, pk: 1 },
+    { name: "title", type: "TEXT", notnull: 0, pk: 0 },
+    { name: "created_at", type: "TEXT", notnull: 1, pk: 0 },
+    { name: "updated_at", type: "TEXT", notnull: 1, pk: 0 },
+  ]);
+  assertConversationTableShape(database, "messages", [
+    { name: "id", type: "TEXT", notnull: 1, pk: 1 },
+    { name: "conversation_id", type: "TEXT", notnull: 1, pk: 0 },
+    { name: "sequence", type: "INTEGER", notnull: 1, pk: 0 },
+    { name: "role", type: "TEXT", notnull: 1, pk: 0 },
+    { name: "content", type: "TEXT", notnull: 1, pk: 0 },
+    { name: "created_at", type: "TEXT", notnull: 1, pk: 0 },
+  ]);
+  assertConversationIndex(database, "conversations", "conversations_updated_idx", [
+    { name: "updated_at", descending: 1 },
+    { name: "created_at", descending: 1 },
+    { name: "id", descending: 1 },
+  ]);
+  assertConversationIndex(database, "messages", "messages_conversation_order_idx", [
+    { name: "conversation_id", descending: 0 },
+    { name: "sequence", descending: 0 },
+  ]);
+}
+
+function verifySchema(database) {
+  assertConversationTableShape(database, "conversations", [
+    { name: "id", type: "TEXT", notnull: 1, pk: 1 },
+    { name: "owner_id", type: "TEXT", notnull: 1, pk: 0 },
+    { name: "title", type: "TEXT", notnull: 0, pk: 0 },
+    { name: "created_at", type: "TEXT", notnull: 1, pk: 0 },
+    { name: "updated_at", type: "TEXT", notnull: 1, pk: 0 },
+  ]);
+  assertConversationTableShape(database, "messages", [
+    { name: "id", type: "TEXT", notnull: 1, pk: 1 },
+    { name: "conversation_id", type: "TEXT", notnull: 1, pk: 0 },
+    { name: "sequence", type: "INTEGER", notnull: 1, pk: 0 },
+    { name: "role", type: "TEXT", notnull: 1, pk: 0 },
+    { name: "content", type: "TEXT", notnull: 1, pk: 0 },
+    { name: "created_at", type: "TEXT", notnull: 1, pk: 0 },
+  ]);
+  assertConversationIndex(database, "conversations", "conversations_owner_updated_idx", [
+    { name: "owner_id", descending: 0 },
+    { name: "updated_at", descending: 1 },
+    { name: "id", descending: 1 },
+  ]);
+  assertConversationIndex(database, "messages", "messages_conversation_order_idx", [
+    { name: "conversation_id", descending: 0 },
+    { name: "sequence", descending: 0 },
+  ]);
+
+  const strictTables = database.prepare(`
+    SELECT name, strict FROM pragma_table_list
+    WHERE name IN ('conversations', 'messages')
+  `).all();
+  if (strictTables.length !== 2 || strictTables.some(({ strict }) => strict !== 1)) {
+    throw new ConversationStoreSchemaError(
+      "Conversation database tables must use strict typing.",
+      CONVERSATION_SCHEMA_VERSION,
+    );
+  }
+  const foreignKeys = database.prepare(`
+    SELECT "table", "from", "to", on_delete
+    FROM pragma_foreign_key_list('messages')
+  `).all();
+  if (
+    foreignKeys.length !== 1
+    || foreignKeys[0].table !== "conversations"
+    || foreignKeys[0].from !== "conversation_id"
+    || foreignKeys[0].to !== "id"
+    || foreignKeys[0].on_delete !== "CASCADE"
+  ) {
+    throw new ConversationStoreSchemaError(
+      "Conversation database has an incompatible message foreign key.",
+      CONVERSATION_SCHEMA_VERSION,
+    );
+  }
+  if (database.prepare("PRAGMA foreign_key_check").all().length > 0) {
+    throw new ConversationStoreSchemaError(
+      "Conversation database contains invalid message ownership.",
+      CONVERSATION_SCHEMA_VERSION,
+    );
+  }
+  const invalidOwners = database.prepare(`
+    SELECT EXISTS (
+      SELECT 1 FROM conversations
+      WHERE owner_id IS NULL
+        OR length(owner_id) != 36
+        OR owner_id NOT GLOB '[0-9A-Fa-f]*'
+    ) AS invalid
+  `).get().invalid;
+  if (invalidOwners) {
+    throw new ConversationStoreSchemaError(
+      "Conversation database contains invalid owner identity.",
+      CONVERSATION_SCHEMA_VERSION,
+    );
+  }
+}
+
 function initializeSchema(database, primaryOwnerId) {
   const version = readSchemaVersion(database);
 
@@ -158,21 +288,14 @@ function initializeSchema(database, primaryOwnerId) {
     throw new UnsupportedConversationSchemaVersionError(version);
   }
 
-  if (version === CONVERSATION_SCHEMA_VERSION) return;
+  if (version === CONVERSATION_SCHEMA_VERSION) {
+    verifySchema(database);
+    return;
+  }
 
   if (version === 1) {
     database.exec("PRAGMA foreign_keys = ON");
-    const tables = database.prepare(`
-      SELECT name FROM sqlite_schema
-      WHERE type = 'table' AND name IN ('conversations', 'messages')
-      ORDER BY name
-    `).all().map(({ name }) => name);
-    if (JSON.stringify(tables) !== JSON.stringify(["conversations", "messages"])) {
-      throw new ConversationStoreSchemaError(
-        "Conversation database schema does not match version 1.",
-        version,
-      );
-    }
+    verifyVersion1Schema(database);
 
     database.exec("BEGIN IMMEDIATE");
     try {
@@ -234,6 +357,7 @@ function initializeSchema(database, primaryOwnerId) {
       database.exec("ROLLBACK");
       throw error;
     }
+    verifySchema(database);
     return;
   }
 
@@ -286,6 +410,7 @@ function initializeSchema(database, primaryOwnerId) {
     database.exec("ROLLBACK");
     throw error;
   }
+  verifySchema(database);
 }
 
 /**
