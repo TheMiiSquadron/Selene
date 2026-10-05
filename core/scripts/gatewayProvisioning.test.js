@@ -56,9 +56,10 @@ test("production CLI rejects arbitrary database paths", () => {
 
 test("production CLI rejects a missing database without creating it", async () => {
   const directory = await mkdtemp(join(tmpdir(), "selene-provisioning-production-"));
-  const databasePath = resolveDefaultGatewayCredentialDatabasePath({
-    LOCALAPPDATA: directory,
-  });
+  const databasePath = resolveDefaultGatewayCredentialDatabasePath(
+    { LOCALAPPDATA: directory },
+    "win32",
+  );
 
   try {
     const result = runCli(["list"], { LOCALAPPDATA: directory });
@@ -73,9 +74,10 @@ test("production CLI rejects a missing database without creating it", async () =
 
 test("production write commands fail closed without exposing secrets", async () => {
   const directory = await mkdtemp(join(tmpdir(), "selene-provisioning-production-write-"));
-  const databasePath = resolveDefaultGatewayCredentialDatabasePath({
-    LOCALAPPDATA: directory,
-  });
+  const databasePath = resolveDefaultGatewayCredentialDatabasePath(
+    { LOCALAPPDATA: directory },
+    "win32",
+  );
   const store = createGatewayCredentialStore({ databasePath });
   store.close();
 
@@ -140,9 +142,10 @@ test("list displays metadata without revealing bearer secrets", async () => {
 test("guard rejects a missing database without creating it", async () => {
   const directory = await mkdtemp(join(tmpdir(), "selene-provisioning-missing-"));
   const previousLocalAppData = process.env.LOCALAPPDATA;
-  const databasePath = resolveDefaultGatewayCredentialDatabasePath({
-    LOCALAPPDATA: directory,
-  });
+  const databasePath = resolveDefaultGatewayCredentialDatabasePath(
+    { LOCALAPPDATA: directory },
+    "win32",
+  );
 
   try {
     process.env.LOCALAPPDATA = directory;
@@ -197,9 +200,10 @@ test("production listing ignores caller-supplied path and inspector overrides", 
   const directory = await mkdtemp(join(tmpdir(), "selene-provisioning-production-list-"));
   const arbitraryDirectory = await mkdtemp(join(tmpdir(), "selene-provisioning-arbitrary-"));
   const previousLocalAppData = process.env.LOCALAPPDATA;
-  const productionPath = resolveDefaultGatewayCredentialDatabasePath({
-    LOCALAPPDATA: directory,
-  });
+  const productionPath = resolveDefaultGatewayCredentialDatabasePath(
+    { LOCALAPPDATA: directory },
+    "win32",
+  );
   const arbitraryPath = join(arbitraryDirectory, "gateway-credentials.sqlite3");
   const arbitraryStore = createGatewayCredentialStore({ databasePath: arbitraryPath });
   arbitraryStore.issueCredential({
@@ -371,9 +375,10 @@ test("production writes remain disabled even with caller-provided guard options"
 test("disposable helpers reject arbitrary database path substitution", async () => {
   const directory = await mkdtemp(join(tmpdir(), "selene-provisioning-production-path-"));
   const database = await createDisposableGatewayCredentialDatabase();
-  const arbitraryPath = resolveDefaultGatewayCredentialDatabasePath({
-    LOCALAPPDATA: directory,
-  });
+  const arbitraryPath = resolveDefaultGatewayCredentialDatabasePath(
+    { LOCALAPPDATA: directory },
+    "win32",
+  );
   const store = createGatewayCredentialStore({ databasePath: arbitraryPath });
   store.close();
 
