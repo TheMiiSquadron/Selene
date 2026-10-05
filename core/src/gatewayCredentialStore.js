@@ -5,7 +5,11 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { mkdirSync } from "node:fs";
-import { isAbsolute, dirname, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import {
+  PlatformPathValidationError,
+  resolveSeleneProductionDataDirectory,
+} from "./platformPaths.js";
 import { DatabaseSync } from "node:sqlite";
 
 export const GATEWAY_CREDENTIAL_SCHEMA_VERSION = 1;
@@ -101,23 +105,22 @@ export class UnsupportedGatewayCredentialSchemaVersionError
   }
 }
 
-export function resolveDefaultGatewayCredentialDatabasePath(env = process.env) {
-  const localAppData = typeof env.LOCALAPPDATA === "string"
-    ? env.LOCALAPPDATA.trim()
-    : "";
-
-  if (!localAppData || !isAbsolute(localAppData)) {
-    throw new GatewayCredentialStoreValidationError(
-      "LOCALAPPDATA must be an absolute path before opening the production Gateway credential store.",
+export function resolveDefaultGatewayCredentialDatabasePath(
+  env = process.env,
+  platform = process.platform,
+) {
+  try {
+    return resolve(
+      resolveSeleneProductionDataDirectory({ platform, env }),
+      "security",
+      GATEWAY_CREDENTIAL_DATABASE_FILENAME,
     );
+  } catch (error) {
+    if (error instanceof PlatformPathValidationError) {
+      throw new GatewayCredentialStoreValidationError(error.message);
+    }
+    throw error;
   }
-
-  return resolve(
-    localAppData,
-    "Selene",
-    "security",
-    GATEWAY_CREDENTIAL_DATABASE_FILENAME,
-  );
 }
 
 function validateDatabasePath(databasePath) {
