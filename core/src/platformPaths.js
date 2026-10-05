@@ -39,3 +39,14 @@ export function resolveSeleneProductionDataDirectory({
     `Unsupported platform for Selene production storage: ${String(platform)}.`,
   );
 }
+
+export function resolveSeleneProductionPath(options = {}, ...segments) {
+  const platform = options.platform ?? process.platform;
+  const pathApi = platform === "win32" ? win32 : platform === "darwin" ? posix : null;
+  if (!pathApi) {
+    throw new PlatformPathValidationError(
+      `Unsupported platform for Selene production storage: ${String(platform)}.`,
+    );
+  }
+  return pathApi.resolve(resolveSeleneProductionDataDirectory(options), ...segments);
+}
