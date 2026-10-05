@@ -362,7 +362,7 @@ test("future schema versions are rejected without modifying their data", async (
   database.exec(`
     CREATE TABLE future_data (value TEXT NOT NULL) STRICT;
     INSERT INTO future_data (value) VALUES ('preserve me');
-    PRAGMA user_version = 2;
+    PRAGMA user_version = 3;
   `);
   database.close();
 
@@ -373,7 +373,7 @@ test("future schema versions are rejected without modifying their data", async (
 
   database = new DatabaseSync(databasePath);
   try {
-    assert.equal(database.prepare("PRAGMA user_version").get().user_version, 2);
+    assert.equal(database.prepare("PRAGMA user_version").get().user_version, 3);
     assert.equal(
       database.prepare("SELECT value FROM future_data").get().value,
       "preserve me",
