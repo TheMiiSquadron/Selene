@@ -22,6 +22,7 @@ import {
   COMPANION_CHAT_STATES,
   handleCompanionChat,
 } from "./companionChat.js";
+import { CompanionConversationValidationError } from "./companionConversations.js";
 import { startSeleneServers } from "./server.js";
 
 const TEST_CHAT_REPLY = "A conversational reply.";
@@ -1105,4 +1106,142 @@ test("a supplied HTTP transport cannot override explicit HTTPS configuration", a
   }), CompanionTransportConfigurationError);
   assert.deepEqual(messages, []);
   await assert.rejects(request({ port }), { code: "ECONNREFUSED" });
+});
+
+
+test("Conversation API creates, lists, and retrieves through the Gateway boundary", async () => {
+  const calls = [];
+  const conversation = {
+    id: "00000000-0000-4000-8000-000000000001",
+    title: "M4.1",
+    createdAt: "2026-10-05T00:00:00.000Z",
+    updatedAt: "2026-10-05T00:00:00.000Z",
+  };
+  const conversationService = {
+    createConversation(payload) {
+      calls.push(["create", payload]);
+      return { ok: true, conversation };
+    },
+    listConversations() {
+      calls.push(["list"]);
+      return { ok: true, conversations: [conversation], limit: 50 };
+    },
+    getConversation(id) {
+      calls.push(["get", id]);
+      return { ok: true, conversation, messages: [] };
+    },
+  };
+  const server = createCompanionServer({ conversationService });
+  const port = await listen(server);
+  const authorization = { Authorization: `Bearer ${TEST_BEARER}` };
+
+  try {
+    const created = await request({
+      port,
+      method: "POST",
+      path: "/api/conversations",
+      headers: { ...authorization, "Content-Type": "application/json" },
+      body: { title: "M4.1" },
+    });
+    const listed = await request({
+      port,
+      path: "/api/conversations",
+      headers: authorization,
+    });
+    const retrieved = await request({
+      port,
+      path: `/api/conversations/${conversation.id}`,
+      headers: authorization,
+    });
+
+    assert.equal(created.statusCode, 201);
+    assert.equal(listed.statusCode, 200);
+    assert.equal(retrieved.statusCode, 200);
+    assert.equal(created.headers["cache-control"], "no-store");
+    assert.deepEqual(calls, [
+      ["create", { title: "M4.1" }],
+      ["list"],
+      ["get", conversation.id],
+    ]);
+  } finally {
+    await close(server);
+  }
+});
+
+test("Conversation API requires HTTPS and authentication", async () => {
+  const conversationService = {
+    listConversations() {
+      return { ok: true, conversations: [], limit: 50 };
+    },
+  };
+  const plaintext = createCompanionServerUnderTest({
+    credentialStore: testCredentialStore,
+    conversationService,
+  });
+  const plaintextPort = await listen(plaintext);
+  try {
+    const response = await request({
+      port: plaintextPort,
+      path: "/api/conversations",
+      headers: { Authorization: `Bearer ${TEST_BEARER}` },
+    });
+    assert.equal(response.statusCode, 426);
+    assert.equal(JSON.parse(response.body).error.code, "HTTPS_REQUIRED");
+  } finally {
+    await close(plaintext);
+  }
+
+  const secure = createCompanionServer({ conversationService });
+  const securePort = await listen(secure);
+  try {
+    const response = await request({
+      port: securePort,
+      path: "/api/conversations",
+    });
+    assert.equal(response.statusCode, 401);
+    assert.equal(JSON.parse(response.body).error.code, "UNAUTHORIZED");
+  } finally {
+    await close(secure);
+  }
+});
+
+test("Conversation API preserves sanitized validation and not-found errors", async () => {
+  const conversationService = {
+    createConversation() {
+      throw new CompanionConversationValidationError(
+        "INVALID_REQUEST",
+        "Conversation title must not be empty.",
+      );
+    },
+    getConversation() {
+      throw new CompanionConversationValidationError(
+        "CONVERSATION_NOT_FOUND",
+        "Conversation not found.",
+      );
+    },
+  };
+  const server = createCompanionServer({ conversationService });
+  const port = await listen(server);
+  const authorization = { Authorization: `Bearer ${TEST_BEARER}` };
+
+  try {
+    const invalid = await request({
+      port,
+      method: "POST",
+      path: "/api/conversations",
+      headers: { ...authorization, "Content-Type": "application/json" },
+      body: { title: "" },
+    });
+    const missing = await request({
+      port,
+      path: "/api/conversations/00000000-0000-4000-8000-000000000099",
+      headers: authorization,
+    });
+    assert.equal(invalid.statusCode, 400);
+    assert.equal(JSON.parse(invalid.body).error.code, "INVALID_REQUEST");
+    assert.equal(missing.statusCode, 404);
+    assert.equal(JSON.parse(missing.body).error.code, "CONVERSATION_NOT_FOUND");
+  } finally {
+    await close(server);
+  }
 });
