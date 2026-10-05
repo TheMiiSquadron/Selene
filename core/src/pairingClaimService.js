@@ -57,7 +57,7 @@ function validateClaimRequest(request) {
 
 /**
  * Creates the narrow remote pairing claim service. It receives only the active
- * session claim closure and the narrow chat-credential issuer. A successful
+ * session claim closure and the narrow standard Home credential issuer. A successful
  * secret claim is consumed before credential issuance; if issuance later fails,
  * the pairing session is deliberately not restored.
  */
