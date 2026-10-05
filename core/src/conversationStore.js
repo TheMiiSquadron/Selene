@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
-import { isAbsolute, dirname, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import {
+  PlatformPathValidationError,
+  resolveSeleneProductionDataDirectory,
+} from "./platformPaths.js";
 import { DatabaseSync } from "node:sqlite";
 
 export const CONVERSATION_SCHEMA_VERSION = 1;
@@ -50,21 +54,22 @@ export class UnsupportedConversationSchemaVersionError extends ConversationStore
   }
 }
 
-export function resolveDefaultConversationDatabasePath(env = process.env) {
-  const localAppData = String(env.LOCALAPPDATA ?? "").trim();
-
-  if (!localAppData || !isAbsolute(localAppData)) {
-    throw new ConversationStoreValidationError(
-      "LOCALAPPDATA must be an absolute path before opening the production conversation store.",
+export function resolveDefaultConversationDatabasePath(
+  env = process.env,
+  platform = process.platform,
+) {
+  try {
+    return resolve(
+      resolveSeleneProductionDataDirectory({ platform, env }),
+      "data",
+      CONVERSATION_DATABASE_FILENAME,
     );
+  } catch (error) {
+    if (error instanceof PlatformPathValidationError) {
+      throw new ConversationStoreValidationError(error.message);
+    }
+    throw error;
   }
-
-  return resolve(
-    localAppData,
-    "Selene",
-    "data",
-    CONVERSATION_DATABASE_FILENAME,
-  );
 }
 
 function validateDatabasePath(databasePath) {
