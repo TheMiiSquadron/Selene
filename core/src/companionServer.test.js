@@ -1334,9 +1334,13 @@ test("Conversation API enforces read and write capabilities before service acces
 test("Persistent message route requires both write and chat capabilities", async () => {
   const calls = [];
   const conversationService = {
-    createConversation() {
-      calls.push("unexpected");
-      return { ok: true, conversation: {} };
+    async sendMessage(id, payload) {
+      calls.push([id, payload]);
+      return {
+        conversationId: id,
+        userMessage: { sequence: 1, role: "user", content: payload.message },
+        assistantMessage: { sequence: 2, role: "assistant", content: "Hello." },
+      };
     },
   };
   const credentialStore = {
@@ -1353,7 +1357,8 @@ test("Persistent message route requires both write and chat capabilities", async
   };
   const server = createCompanionServer({ conversationService, credentialStore });
   const port = await listen(server);
-  const path = "/api/conversations/00000000-0000-4000-8000-000000000001/messages";
+  const conversationId = "00000000-0000-4000-8000-000000000001";
+  const path = `/api/conversations/${conversationId}/messages`;
 
   try {
     for (const credential of ["write-only", "chat-only"]) {
@@ -1361,7 +1366,11 @@ test("Persistent message route requires both write and chat capabilities", async
         port,
         method: "POST",
         path,
-        headers: { Authorization: `Bearer ${credential}` },
+        headers: {
+          Authorization: `Bearer ${credential}`,
+          "Content-Type": "application/json",
+        },
+        body: { message: "Hello" },
       });
       assert.equal(denied.statusCode, 403);
       assert.equal(JSON.parse(denied.body).error.code, "FORBIDDEN");
@@ -1371,12 +1380,76 @@ test("Persistent message route requires both write and chat capabilities", async
       port,
       method: "POST",
       path,
-      headers: { Authorization: "Bearer full-home" },
+      headers: {
+        Authorization: "Bearer full-home",
+        "Content-Type": "application/json",
+      },
+      body: { message: "Hello" },
     });
-    assert.equal(allowed.statusCode, 501);
-    assert.equal(JSON.parse(allowed.body).error.code, "NOT_IMPLEMENTED");
-    assert.deepEqual(calls, []);
+    assert.equal(allowed.statusCode, 200);
+    assert.equal(JSON.parse(allowed.body).assistantMessage.content, "Hello.");
+    assert.deepEqual(calls, [[conversationId, { message: "Hello" }]]);
   } finally {
     await close(server);
+  }
+});
+
+test("Persistent message route maps turn failures to stable sanitized errors", async () => {
+  const conversationId = "00000000-0000-4000-8000-000000000001";
+  const cases = [
+    ["INVALID_REQUEST", 400],
+    ["CONVERSATION_NOT_FOUND", 404],
+    ["CONTEXT_LIMIT_EXCEEDED", 409],
+    ["MODEL_UNAVAILABLE", 503],
+  ];
+
+  for (const [code, statusCode] of cases) {
+    const conversationService = {
+      async sendMessage() {
+        throw new CompanionConversationValidationError(code, "safe message");
+      },
+    };
+    const server = createCompanionServer({ conversationService });
+    const port = await listen(server);
+    try {
+      const result = await request({
+        port,
+        method: "POST",
+        path: `/api/conversations/${conversationId}/messages`,
+        headers: {
+          Authorization: `Bearer ${TEST_BEARER}`,
+          "Content-Type": "application/json",
+        },
+        body: { message: "Hello" },
+      });
+      assert.equal(result.statusCode, statusCode);
+      assert.equal(JSON.parse(result.body).error.code, code);
+    } finally {
+      await close(server);
+    }
+  }
+
+  const failingServer = createCompanionServer({
+    conversationService: {
+      async sendMessage() { throw new Error("private sqlite path C:\\secret"); },
+    },
+  });
+  const failingPort = await listen(failingServer);
+  try {
+    const result = await request({
+      port: failingPort,
+      method: "POST",
+      path: `/api/conversations/${conversationId}/messages`,
+      headers: {
+        Authorization: `Bearer ${TEST_BEARER}`,
+        "Content-Type": "application/json",
+      },
+      body: { message: "Hello" },
+    });
+    assert.equal(result.statusCode, 500);
+    assert.equal(JSON.parse(result.body).error.code, "INTERNAL_ERROR");
+    assert.doesNotMatch(result.body, /secret|sqlite/i);
+  } finally {
+    await close(failingServer);
   }
 });
