@@ -37,31 +37,60 @@ test("conversation creation accepts only an empty client object", () => {
   );
 });
 
-test("conversation lists default to 20 and reject limits above 100", () => {
-  const rows = Array.from({ length: 21 }, (_, index) => ({ id: String(index) }));
+test("conversation lists use bounded keyset pagination and opaque cursors", () => {
+  const calls = [];
+  const rows = Array.from({ length: 21 }, (_, index) => ({
+    id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+    updatedAt: new Date(Date.UTC(2026, 9, 5, 20, 0, 20 - index)).toISOString(),
+  }));
   const service = createCompanionConversationService({
-    conversationStore: { listConversations() { return rows; } },
+    conversationStore: {
+      listConversations(options) {
+        calls.push(options);
+        return rows;
+      },
+    },
   });
 
-  const result = service.listConversations();
+  const first = service.listConversations();
   assert.equal(COMPANION_CONVERSATION_LIST_DEFAULT_LIMIT, 20);
   assert.equal(COMPANION_CONVERSATION_LIST_MAX_LIMIT, 100);
-  assert.equal(result.conversations.length, 20);
-  assert.equal(result.hasMore, true);
+  assert.equal(first.conversations.length, 20);
+  assert.equal(first.hasMore, true);
+  assert.equal(typeof first.nextCursor, "string");
+  assert.deepEqual(calls[0], { limit: 21, after: null });
+
+  service.listConversations({ limit: 20, cursor: first.nextCursor });
+  assert.deepEqual(calls[1], {
+    limit: 21,
+    after: {
+      updatedAt: rows[19].updatedAt,
+      id: rows[19].id,
+    },
+  });
+
   assert.throws(
     () => service.listConversations({ limit: 101 }),
     (error) => error.code === "INVALID_REQUEST",
   );
+  assert.throws(
+    () => service.listConversations({ cursor: "not-a-valid-cursor" }),
+    (error) => error.code === "INVALID_REQUEST",
+  );
 });
 
-test("conversation retrieval is bounded to 200 chronological messages", () => {
-  const messages = Array.from({ length: 201 }, (_, index) => ({
+test("conversation retrieval returns complete bounded history and rejects overflow", () => {
+  const calls = [];
+  const messages = Array.from({ length: 200 }, (_, index) => ({
     sequence: index + 1,
   }));
   const service = createCompanionConversationService({
     conversationStore: {
       getConversation() { return { id: ID, title: null }; },
-      getMessages() { return messages; },
+      getMessages(_id, options) {
+        calls.push(options);
+        return messages;
+      },
     },
   });
 
@@ -70,10 +99,23 @@ test("conversation retrieval is bounded to 200 chronological messages", () => {
   assert.equal(result.messages.length, 200);
   assert.equal(result.messages[0].sequence, 1);
   assert.equal(result.messages.at(-1).sequence, 200);
-  assert.equal(result.hasMore, true);
+  assert.deepEqual(calls, [{ limit: 201 }]);
   assert.throws(
-    () => service.getConversation(ID, { limit: 201 }),
+    () => service.getConversation(ID, { limit: 20 }),
     (error) => error.code === "INVALID_REQUEST",
+  );
+
+  const overflow = createCompanionConversationService({
+    conversationStore: {
+      getConversation() { return { id: ID, title: null }; },
+      getMessages() {
+        return Array.from({ length: 201 }, (_, index) => ({ sequence: index + 1 }));
+      },
+    },
+  });
+  assert.throws(
+    () => overflow.getConversation(ID),
+    (error) => error.code === "CONTEXT_LIMIT_EXCEEDED",
   );
 });
 
