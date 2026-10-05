@@ -249,7 +249,7 @@ export function createCompanionConversationService({
         throw mapStoreError(error);
       }
 
-      if (history.length > COMPANION_CONVERSATION_CONTEXT_MAX_MESSAGES) {
+      if (history.length + 2 > COMPANION_CONVERSATION_CONTEXT_MAX_MESSAGES) {
         throw new CompanionConversationValidationError(
           "CONTEXT_LIMIT_EXCEEDED",
           "Conversation context limit exceeded.",
