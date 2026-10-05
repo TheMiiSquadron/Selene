@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import {
   loadModelProfiles,
   normalizeModelRole,
+  resolveModelProfile,
   ModelProfileError,
 } from "./modelProfiles.js";
 
@@ -81,12 +82,14 @@ async function defaultRunLms(args, { timeoutMs = DEFAULT_LOAD_TIMEOUT_MS } = {})
   }
 }
 
-function roleConfig(profiles, role) {
+function roleConfig(profiles, role, env) {
   const normalizedRole = normalizeModelRole(role);
-  const profile = profiles?.roles?.[normalizedRole];
-  if (!profile) {
-    throw new ModelProfileError(`Unknown model role: ${normalizedRole}.`);
-  }
+  const profile = resolveModelProfile({
+    role: normalizedRole,
+    profiles,
+    env,
+    allowRoleFallback: false,
+  });
 
   const residency = profile.residency ?? {};
   const modelKey = String(residency.modelKey || profile.model || "").trim();
@@ -107,13 +110,14 @@ function roleConfig(profiles, role) {
   };
 }
 
-function roleForResident(resident, profiles) {
+function roleForResident(resident, profiles, env) {
   for (const role of Object.keys(profiles?.roles ?? {})) {
-    const profile = profiles.roles[role];
-    const residency = profile.residency ?? {};
-    const modelKey = String(residency.modelKey || profile.model || "").trim();
-    const apiId = String(residency.apiId || profile.apiId || modelKey).trim();
-    if (resident.identifier === apiId || resident.modelKey === modelKey) return role;
+    try {
+      const config = roleConfig(profiles, role, env);
+      if (resident.identifier === config.apiId || resident.modelKey === config.modelKey) return role;
+    } catch (error) {
+      if (!(error instanceof ModelProfileError)) throw error;
+    }
   }
 
   return "";
@@ -125,15 +129,15 @@ function activeResidentFor(config, residents) {
   ) ?? null;
 }
 
-function summarizeState(residents, profiles) {
+function summarizeState(residents, profiles, env) {
   const active = residents[0] ?? null;
   return {
     loaded: residents.length > 0,
     residents: residents.map((resident) => ({
       ...resident,
-      role: roleForResident(resident, profiles),
+      role: roleForResident(resident, profiles, env),
     })),
-    activeRole: active ? roleForResident(active, profiles) : "",
+    activeRole: active ? roleForResident(active, profiles, env) : "",
     activeIdentifier: active?.identifier ?? "",
     activeModelKey: active?.modelKey ?? "",
   };
@@ -144,6 +148,7 @@ export function createModelManager({
   runLms = defaultRunLms,
   sleepFn = sleep,
   now = () => process.hrtime.bigint(),
+  env = process.env,
 } = {}) {
   let queue = Promise.resolve();
 
@@ -178,7 +183,7 @@ export function createModelManager({
     return {
       residents: parseLmsPs(result.stdout),
       residencyCheckMs,
-      state: summarizeState(parseLmsPs(result.stdout), profiles),
+      state: summarizeState(parseLmsPs(result.stdout), profiles, env),
     };
   }
 
@@ -215,7 +220,7 @@ export function createModelManager({
 
   async function ensureRoleReadyUnlocked(role) {
     const profiles = await loadProfiles();
-    const config = roleConfig(profiles, role);
+    const config = roleConfig(profiles, role, env);
     const before = await readResidents(profiles);
     const residentBefore = activeResidentFor(config, before.residents);
 
