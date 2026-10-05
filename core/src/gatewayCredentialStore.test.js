@@ -84,7 +84,7 @@ test("fresh database initializes the versioned strict schema and required settin
         WHERE type = 'table' AND name LIKE 'gateway_%'
         ORDER BY name
       `).all().map(({ name }) => name),
-      ["gateway_credential_capabilities", "gateway_credentials"],
+      ["gateway_credential_capabilities", "gateway_credentials", "gateway_settings"],
     );
     assert.equal(database.prepare("PRAGMA journal_mode").get().journal_mode, "wal");
     assert.deepEqual(
@@ -118,6 +118,8 @@ test("issuance returns unique credentials with stable identity and all approved 
     });
 
     assert.match(first.credential.id, UUID_PATTERN);
+    assert.match(first.credential.ownerId, UUID_PATTERN);
+    assert.equal(first.credential.ownerId, store.getPrimaryOwnerId());
     assert.match(second.credential.id, UUID_PATTERN);
     assert.notEqual(first.credential.id, second.credential.id);
     assert.notEqual(first.bearerCredential, second.bearerCredential);
@@ -128,6 +130,7 @@ test("issuance returns unique credentials with stable identity and all approved 
     const identity = store.authenticateCredential(first.bearerCredential);
     assert.deepEqual(identity, {
       credentialId: first.credential.id,
+      ownerId: first.credential.ownerId,
       homeId: "windows-home",
       displayName: "Windows Home",
       createdAt: instant.toISOString(),
@@ -135,6 +138,57 @@ test("issuance returns unique credentials with stable identity and all approved 
     });
   } finally {
     store.close();
+  }
+});
+
+test("schema v1 migrates existing credentials to one stable primary owner", async () => {
+  const databasePath = await createTempDatabasePath();
+  const legacy = new DatabaseSync(databasePath);
+  legacy.exec(`
+    CREATE TABLE gateway_credentials (
+      id TEXT PRIMARY KEY NOT NULL,
+      home_id TEXT NOT NULL CHECK (length(home_id) BETWEEN 1 AND 100 AND home_id = trim(home_id)),
+      display_name TEXT NOT NULL CHECK (length(display_name) BETWEEN 1 AND 200 AND display_name = trim(display_name)),
+      secret_digest BLOB NOT NULL CHECK (typeof(secret_digest) = 'blob' AND length(secret_digest) = 32),
+      created_at TEXT NOT NULL,
+      revoked_at TEXT
+    ) STRICT;
+    CREATE TABLE gateway_credential_capabilities (
+      credential_id TEXT NOT NULL REFERENCES gateway_credentials(id) ON DELETE CASCADE,
+      capability TEXT NOT NULL CHECK (capability IN ('chat', 'conversation:read', 'conversation:write')),
+      PRIMARY KEY (credential_id, capability)
+    ) STRICT;
+    CREATE INDEX gateway_credentials_created_idx ON gateway_credentials(created_at DESC, id DESC);
+    CREATE INDEX gateway_credentials_home_idx ON gateway_credentials(home_id, created_at DESC, id DESC);
+    INSERT INTO gateway_credentials VALUES
+      ('00000000-0000-4000-8000-000000000010', 'old-home', 'Old Home', zeroblob(32), '2026-01-01T00:00:00.000Z', NULL);
+    INSERT INTO gateway_credential_capabilities VALUES
+      ('00000000-0000-4000-8000-000000000010', 'chat');
+    PRAGMA user_version = 1;
+  `);
+  legacy.close();
+
+  const primaryOwnerId = "00000000-0000-4000-8000-000000000099";
+  const store = createGatewayCredentialStore({
+    databasePath,
+    generateOwnerId: () => primaryOwnerId,
+  });
+  try {
+    assert.equal(store.getPrimaryOwnerId(), primaryOwnerId);
+    assert.equal(store.listCredentials()[0].ownerId, primaryOwnerId);
+  } finally {
+    store.close();
+  }
+
+  const migrated = new DatabaseSync(databasePath);
+  try {
+    assert.equal(migrated.prepare("PRAGMA user_version").get().user_version, 2);
+    assert.equal(
+      migrated.prepare("SELECT owner_id FROM gateway_credentials").get().owner_id,
+      primaryOwnerId,
+    );
+  } finally {
+    migrated.close();
   }
 });
 
@@ -170,7 +224,7 @@ test("database persists only fixed-size digests and public results never disclos
     assert.equal(row.digest_length, 32);
     assert.notDeepEqual(row.secret_digest, secret);
     assert.ok(!JSON.stringify(database.prepare(`
-      SELECT id, home_id, display_name, created_at, revoked_at
+      SELECT id, owner_id, home_id, display_name, created_at, revoked_at
       FROM gateway_credentials
     `).all()).includes(encodedSecret));
   } finally {
@@ -405,7 +459,7 @@ test("future and incompatible schemas are rejected without rebuilding", async ()
   database.exec(`
     CREATE TABLE future_data (value TEXT NOT NULL) STRICT;
     INSERT INTO future_data (value) VALUES ('preserve me');
-    PRAGMA user_version = 2;
+    PRAGMA user_version = 3;
   `);
   database.close();
 
@@ -450,12 +504,19 @@ test("schema verification rejects weakened constraints, foreign keys, and indexe
     database.exec(`
       CREATE TABLE gateway_credentials (
         id TEXT PRIMARY KEY NOT NULL,
+        owner_id TEXT NOT NULL,
         home_id TEXT NOT NULL,
         display_name TEXT NOT NULL,
         secret_digest BLOB NOT NULL,
         created_at TEXT NOT NULL,
         revoked_at TEXT
       ) STRICT;
+      CREATE TABLE gateway_settings (
+        key TEXT PRIMARY KEY NOT NULL,
+        value TEXT NOT NULL
+      ) STRICT;
+      INSERT INTO gateway_settings (key, value)
+        VALUES ('primary_owner_id', '00000000-0000-4000-8000-000000000001');
       CREATE TABLE gateway_credential_capabilities (
         credential_id TEXT NOT NULL,
         capability TEXT NOT NULL,
@@ -465,7 +526,9 @@ test("schema verification rejects weakened constraints, foreign keys, and indexe
         ON gateway_credentials(created_at DESC, id DESC);
       CREATE INDEX gateway_credentials_home_idx
         ON gateway_credentials(home_id, created_at DESC, id DESC);
-      PRAGMA user_version = 1;
+      CREATE INDEX gateway_credentials_owner_idx
+        ON gateway_credentials(owner_id, created_at DESC, id DESC);
+      PRAGMA user_version = 2;
     `);
     database.close();
 
