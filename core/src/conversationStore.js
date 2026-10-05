@@ -7,7 +7,7 @@ import {
 } from "./platformPaths.js";
 import { DatabaseSync } from "node:sqlite";
 
-export const CONVERSATION_SCHEMA_VERSION = 1;
+export const CONVERSATION_SCHEMA_VERSION = 2;
 export const CONVERSATION_DATABASE_FILENAME = "conversations.sqlite3";
 
 const BUSY_TIMEOUT_MS = 5_000;
@@ -80,6 +80,14 @@ function validateDatabasePath(databasePath) {
   return resolve(value);
 }
 
+function validateOwnerId(ownerId) {
+  const value = String(ownerId ?? "").trim();
+  if (!UUID_PATTERN.test(value)) {
+    throw new ConversationStoreValidationError("Owner ID must be a UUID.");
+  }
+  return value.toLowerCase();
+}
+
 function validateConversationId(conversationId) {
   const value = String(conversationId ?? "").trim();
   if (!UUID_PATTERN.test(value)) {
@@ -143,7 +151,7 @@ function readSchemaVersion(database) {
   return Number(database.prepare("PRAGMA user_version").get().user_version);
 }
 
-function initializeSchema(database) {
+function initializeSchema(database, primaryOwnerId) {
   const version = readSchemaVersion(database);
 
   if (version > CONVERSATION_SCHEMA_VERSION) {
@@ -151,6 +159,83 @@ function initializeSchema(database) {
   }
 
   if (version === CONVERSATION_SCHEMA_VERSION) return;
+
+  if (version === 1) {
+    database.exec("PRAGMA foreign_keys = ON");
+    const tables = database.prepare(`
+      SELECT name FROM sqlite_schema
+      WHERE type = 'table' AND name IN ('conversations', 'messages')
+      ORDER BY name
+    `).all().map(({ name }) => name);
+    if (JSON.stringify(tables) !== JSON.stringify(["conversations", "messages"])) {
+      throw new ConversationStoreSchemaError(
+        "Conversation database schema does not match version 1.",
+        version,
+      );
+    }
+
+    database.exec("BEGIN IMMEDIATE");
+    try {
+      database.exec(`
+        DROP INDEX conversations_updated_idx;
+        ALTER TABLE conversations ADD COLUMN owner_id TEXT;
+        UPDATE conversations SET owner_id = '${primaryOwnerId}';
+
+        CREATE TABLE conversations_v2 (
+          id TEXT PRIMARY KEY NOT NULL,
+          owner_id TEXT NOT NULL CHECK (length(owner_id) = 36),
+          title TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        ) STRICT;
+        INSERT INTO conversations_v2
+          SELECT id, owner_id, title, created_at, updated_at FROM conversations;
+
+        DROP INDEX messages_conversation_order_idx;
+        CREATE TABLE messages_v2 (
+          id TEXT PRIMARY KEY NOT NULL,
+          conversation_id TEXT NOT NULL,
+          sequence INTEGER NOT NULL CHECK (sequence >= 1),
+          role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+          content TEXT NOT NULL CHECK (length(content) > 0),
+          created_at TEXT NOT NULL,
+          UNIQUE (conversation_id, sequence)
+        ) STRICT;
+        INSERT INTO messages_v2
+          SELECT id, conversation_id, sequence, role, content, created_at FROM messages;
+
+        DROP TABLE messages;
+        DROP TABLE conversations;
+        ALTER TABLE conversations_v2 RENAME TO conversations;
+
+        CREATE TABLE messages (
+          id TEXT PRIMARY KEY NOT NULL,
+          conversation_id TEXT NOT NULL
+            REFERENCES conversations(id) ON DELETE CASCADE,
+          sequence INTEGER NOT NULL CHECK (sequence >= 1),
+          role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+          content TEXT NOT NULL CHECK (length(content) > 0),
+          created_at TEXT NOT NULL,
+          UNIQUE (conversation_id, sequence)
+        ) STRICT;
+        INSERT INTO messages
+          SELECT id, conversation_id, sequence, role, content, created_at FROM messages_v2;
+        DROP TABLE messages_v2;
+
+        CREATE INDEX conversations_owner_updated_idx
+          ON conversations(owner_id, updated_at DESC, id DESC);
+        CREATE INDEX messages_conversation_order_idx
+          ON messages(conversation_id, sequence);
+
+        PRAGMA user_version = 2;
+      `);
+      database.exec("COMMIT");
+    } catch (error) {
+      database.exec("ROLLBACK");
+      throw error;
+    }
+    return;
+  }
 
   const existingTables = database.prepare(`
     SELECT name
@@ -171,6 +256,7 @@ function initializeSchema(database) {
     database.exec(`
       CREATE TABLE conversations (
         id TEXT PRIMARY KEY NOT NULL,
+        owner_id TEXT NOT NULL CHECK (length(owner_id) = 36),
         title TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
@@ -187,13 +273,13 @@ function initializeSchema(database) {
         UNIQUE (conversation_id, sequence)
       ) STRICT;
 
-      CREATE INDEX conversations_updated_idx
-        ON conversations(updated_at DESC, created_at DESC, id DESC);
+      CREATE INDEX conversations_owner_updated_idx
+        ON conversations(owner_id, updated_at DESC, id DESC);
 
       CREATE INDEX messages_conversation_order_idx
         ON messages(conversation_id, sequence);
 
-      PRAGMA user_version = 1;
+      PRAGMA user_version = 2;
     `);
     database.exec("COMMIT");
   } catch (error) {
@@ -213,7 +299,9 @@ export function createConversationStore({
   databasePath = resolveDefaultConversationDatabasePath(),
   now = () => new Date(),
   generateId = randomUUID,
+  primaryOwnerId,
 } = {}) {
+  const normalizedPrimaryOwnerId = validateOwnerId(primaryOwnerId);
   const resolvedDatabasePath = validateDatabasePath(databasePath);
   mkdirSync(dirname(resolvedDatabasePath), { recursive: true });
 
@@ -223,7 +311,7 @@ export function createConversationStore({
   let closed = false;
 
   try {
-    initializeSchema(database);
+    initializeSchema(database, normalizedPrimaryOwnerId);
     database.exec("PRAGMA foreign_keys = ON");
     database.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
     database.exec("PRAGMA journal_mode = WAL");
@@ -234,18 +322,18 @@ export function createConversationStore({
   }
 
   const selectConversation = database.prepare(`
-    SELECT id, title, created_at, updated_at
+    SELECT id, owner_id, title, created_at, updated_at
     FROM conversations
     WHERE id = ?
   `);
   const listConversationRows = database.prepare(`
-    SELECT id, title, created_at, updated_at
+    SELECT id, owner_id, title, created_at, updated_at
     FROM conversations
     ORDER BY updated_at DESC, id DESC
     LIMIT ?
   `);
   const listConversationRowsAfter = database.prepare(`
-    SELECT id, title, created_at, updated_at
+    SELECT id, owner_id, title, created_at, updated_at
     FROM conversations
     WHERE updated_at < ?
        OR (updated_at = ? AND id < ?)
@@ -253,8 +341,8 @@ export function createConversationStore({
     LIMIT ?
   `);
   const insertConversation = database.prepare(`
-    INSERT INTO conversations (id, title, created_at, updated_at)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO conversations (id, owner_id, title, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
   `);
   const selectMessages = database.prepare(`
     SELECT id, conversation_id, sequence, role, content, created_at
@@ -322,7 +410,7 @@ export function createConversationStore({
     const timestamp = createTimestamp();
     const normalizedTitle = validateTitle(title);
 
-    insertConversation.run(id, normalizedTitle, timestamp, timestamp);
+    insertConversation.run(id, normalizedPrimaryOwnerId, normalizedTitle, timestamp, timestamp);
     return mapConversation(selectConversation.get(id));
   }
 
