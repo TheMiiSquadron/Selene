@@ -159,20 +159,20 @@ export function createCompanionConversationService({
     }
   }
 
-  function createConversation(payload = {}) {
+  function createConversation(ownerId, payload = {}) {
     const body = requireObject(payload);
     rejectUnknownKeys(body, new Set());
     requireStoreMethod(conversationStore, "createConversation");
 
     try {
-      const conversation = conversationStore.createConversation();
+      const conversation = conversationStore.createConversation(ownerId);
       return Object.freeze({ ok: true, conversation });
     } catch (error) {
       throw mapStoreError(error);
     }
   }
 
-  function listConversations({ limit, cursor } = {}) {
+  function listConversations(ownerId, { limit, cursor } = {}) {
     requireStoreMethod(conversationStore, "listConversations");
     const resolvedLimit = parseLimit(limit, {
       defaultLimit: COMPANION_CONVERSATION_LIST_DEFAULT_LIMIT,
@@ -181,7 +181,7 @@ export function createCompanionConversationService({
     const after = validateCursor(cursor);
 
     try {
-      const rows = conversationStore.listConversations({
+      const rows = conversationStore.listConversations(ownerId, {
         limit: resolvedLimit + 1,
         after,
       });
@@ -198,7 +198,7 @@ export function createCompanionConversationService({
     }
   }
 
-  function getConversation(conversationId, { limit, cursor } = {}) {
+  function getConversation(ownerId, conversationId, { limit, cursor } = {}) {
     requireStoreMethod(conversationStore, "getConversation");
     requireStoreMethod(conversationStore, "getMessages");
     if (limit !== undefined || cursor !== undefined) {
@@ -206,11 +206,11 @@ export function createCompanionConversationService({
     }
 
     try {
-      const conversation = conversationStore.getConversation(conversationId);
+      const conversation = conversationStore.getConversation(ownerId, conversationId);
       if (!conversation) {
         throw new ConversationNotFoundError(conversationId);
       }
-      const messages = conversationStore.getMessages(conversationId, {
+      const messages = conversationStore.getMessages(ownerId, conversationId, {
         limit: COMPANION_CONVERSATION_MESSAGE_MAX_LIMIT + 1,
       });
       if (messages.length > COMPANION_CONVERSATION_MESSAGE_MAX_LIMIT) {
@@ -229,7 +229,7 @@ export function createCompanionConversationService({
     }
   }
 
-  async function sendMessage(conversationId, payload) {
+  async function sendMessage(ownerId, conversationId, payload) {
     const userContent = validateTurnPayload(payload);
     requireStoreMethod(conversationStore, "getConversation");
     requireStoreMethod(conversationStore, "getMessages");
@@ -238,13 +238,13 @@ export function createCompanionConversationService({
       throw new Error("Model service unavailable.");
     }
 
-    return runSerializedTurn(conversationId, async () => {
+    return runSerializedTurn(`${ownerId}:${conversationId}`, async () => {
       let conversation;
       let history;
       try {
-        conversation = conversationStore.getConversation(conversationId);
+        conversation = conversationStore.getConversation(ownerId, conversationId);
         if (!conversation) throw new ConversationNotFoundError(conversationId);
-        history = conversationStore.getMessages(conversationId);
+        history = conversationStore.getMessages(ownerId, conversationId);
       } catch (error) {
         throw mapStoreError(error);
       }
@@ -278,6 +278,7 @@ export function createCompanionConversationService({
 
       try {
         const { userMessage, assistantMessage } = conversationStore.commitTurn(
+          ownerId,
           conversation.id,
           userContent,
           assistantContent,
