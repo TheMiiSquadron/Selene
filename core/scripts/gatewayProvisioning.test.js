@@ -46,6 +46,50 @@ function runCli(args, env = {}) {
   );
 }
 
+function productionTestEnvironment(directory) {
+  if (process.platform === "win32") {
+    return {
+      env: { LOCALAPPDATA: directory },
+      databasePath: resolveDefaultGatewayCredentialDatabasePath(
+        { LOCALAPPDATA: directory },
+        "win32",
+      ),
+    };
+  }
+
+  if (process.platform === "darwin") {
+    return {
+      env: { HOME: directory },
+      databasePath: resolveDefaultGatewayCredentialDatabasePath(
+        { HOME: directory },
+        "darwin",
+      ),
+    };
+  }
+
+  throw new Error(`Unsupported production test platform: ${process.platform}`);
+}
+
+async function withProductionTestEnvironment(directory, operation) {
+  const { env, databasePath } = productionTestEnvironment(directory);
+  const previous = Object.fromEntries(
+    Object.keys(env).map((name) => [name, process.env[name]]),
+  );
+
+  Object.assign(process.env, env);
+  try {
+    return await operation({ env, databasePath });
+  } finally {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
+  }
+}
+
 test("production CLI rejects arbitrary database paths", () => {
   const result = runCli(["list", "--database", "C:\\test.sqlite3"]);
 
@@ -56,13 +100,10 @@ test("production CLI rejects arbitrary database paths", () => {
 
 test("production CLI rejects a missing database without creating it", async () => {
   const directory = await mkdtemp(join(tmpdir(), "selene-provisioning-production-"));
-  const databasePath = resolveDefaultGatewayCredentialDatabasePath(
-    { LOCALAPPDATA: directory },
-    "win32",
-  );
+  const { env, databasePath } = productionTestEnvironment(directory);
 
   try {
-    const result = runCli(["list"], { LOCALAPPDATA: directory });
+    const result = runCli(["list"], env);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /must already exist as a regular file/);
     assert.doesNotMatch(result.stdout + result.stderr, SECRET_PATTERN);
@@ -74,17 +115,14 @@ test("production CLI rejects a missing database without creating it", async () =
 
 test("production write commands fail closed without exposing secrets", async () => {
   const directory = await mkdtemp(join(tmpdir(), "selene-provisioning-production-write-"));
-  const databasePath = resolveDefaultGatewayCredentialDatabasePath(
-    { LOCALAPPDATA: directory },
-    "win32",
-  );
+  const { env, databasePath } = productionTestEnvironment(directory);
   const store = createGatewayCredentialStore({ databasePath });
   store.close();
 
   try {
     const issue = runCli(
       ["issue", "--home-id", "nova", "--display-name", "NOVA"],
-      { LOCALAPPDATA: directory },
+      env,
     );
     assert.equal(issue.status, 1);
     assert.match(issue.stderr, /write operations are disabled/);
@@ -92,7 +130,7 @@ test("production write commands fail closed without exposing secrets", async () 
 
     const revoke = runCli(
       ["revoke", "--id", "00000000-0000-4000-8000-000000000000"],
-      { LOCALAPPDATA: directory },
+      env,
     );
     assert.equal(revoke.status, 1);
     assert.match(revoke.stderr, /write operations are disabled/);
@@ -141,29 +179,19 @@ test("list displays metadata without revealing bearer secrets", async () => {
 
 test("guard rejects a missing database without creating it", async () => {
   const directory = await mkdtemp(join(tmpdir(), "selene-provisioning-missing-"));
-  const previousLocalAppData = process.env.LOCALAPPDATA;
-  const databasePath = resolveDefaultGatewayCredentialDatabasePath(
-    { LOCALAPPDATA: directory },
-    "win32",
-  );
-
   try {
-    process.env.LOCALAPPDATA = directory;
-    assert.throws(
-      () => listGatewayCredentials({
-        databasePath: join(directory, "missing.sqlite3"),
-        expectedDatabasePath: join(directory, "missing.sqlite3"),
-      }),
-      /Gateway credential database must already exist as a regular file/,
-    );
+    await withProductionTestEnvironment(directory, async ({ databasePath }) => {
+      assert.throws(
+        () => listGatewayCredentials({
+          databasePath: join(directory, "missing.sqlite3"),
+          expectedDatabasePath: join(directory, "missing.sqlite3"),
+        }),
+        /Gateway credential database must already exist as a regular file/,
+      );
 
-    await assert.rejects(access(databasePath), { code: "ENOENT" });
+      await assert.rejects(access(databasePath), { code: "ENOENT" });
+    });
   } finally {
-    if (previousLocalAppData === undefined) {
-      delete process.env.LOCALAPPDATA;
-    } else {
-      process.env.LOCALAPPDATA = previousLocalAppData;
-    }
     await rm(directory, { recursive: true, force: true });
   }
 });
@@ -199,11 +227,7 @@ test("disposable listing rejects direct symbolic-link path input", async (t) => 
 test("production listing ignores caller-supplied path and inspector overrides", async () => {
   const directory = await mkdtemp(join(tmpdir(), "selene-provisioning-production-list-"));
   const arbitraryDirectory = await mkdtemp(join(tmpdir(), "selene-provisioning-arbitrary-"));
-  const previousLocalAppData = process.env.LOCALAPPDATA;
-  const productionPath = resolveDefaultGatewayCredentialDatabasePath(
-    { LOCALAPPDATA: directory },
-    "win32",
-  );
+  const { databasePath: productionPath } = productionTestEnvironment(directory);
   const arbitraryPath = join(arbitraryDirectory, "gateway-credentials.sqlite3");
   const arbitraryStore = createGatewayCredentialStore({ databasePath: arbitraryPath });
   arbitraryStore.issueCredential({
@@ -214,25 +238,21 @@ test("production listing ignores caller-supplied path and inspector overrides", 
   arbitraryStore.close();
 
   try {
-    process.env.LOCALAPPDATA = directory;
-    assert.throws(
-      () => listGatewayCredentials({
-        databasePath: arbitraryPath,
-        expectedDatabasePath: arbitraryPath,
-        allowNonProductionDatabasePath: true,
-        securityInspector() {
-          return { filesystemIdentityVerified: true };
-        },
-      }),
-      /Gateway credential database must already exist as a regular file/,
-    );
-    await assert.rejects(access(productionPath), { code: "ENOENT" });
+    await withProductionTestEnvironment(directory, async () => {
+      assert.throws(
+        () => listGatewayCredentials({
+          databasePath: arbitraryPath,
+          expectedDatabasePath: arbitraryPath,
+          allowNonProductionDatabasePath: true,
+          securityInspector() {
+            return { filesystemIdentityVerified: true };
+          },
+        }),
+        /Gateway credential database must already exist as a regular file/,
+      );
+      await assert.rejects(access(productionPath), { code: "ENOENT" });
+    });
   } finally {
-    if (previousLocalAppData === undefined) {
-      delete process.env.LOCALAPPDATA;
-    } else {
-      process.env.LOCALAPPDATA = previousLocalAppData;
-    }
     await rm(directory, { recursive: true, force: true });
     await rm(arbitraryDirectory, { recursive: true, force: true });
   }
