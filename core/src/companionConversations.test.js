@@ -9,6 +9,7 @@ import {
 } from "./companionConversations.js";
 
 const ID = "00000000-0000-4000-8000-000000000001";
+const OWNER_ID = OWNER_ID;
 
 test("conversation service exposes its operations", () => {
   const service = createCompanionConversationService({ conversationStore: {} });
@@ -28,10 +29,10 @@ test("conversation creation accepts only an empty client object", () => {
     },
   });
 
-  assert.equal(service.createConversation("00000000-0000-4000-8000-0000000000aa", {}).conversation.title, null);
-  assert.deepEqual(calls, [[]]);
+  assert.equal(service.createConversation(OWNER_ID, {}).conversation.title, null);
+  assert.deepEqual(calls, [[OWNER_ID]]);
   assert.throws(
-    () => service.createConversation("00000000-0000-4000-8000-0000000000aa", { title: "client title" }),
+    () => service.createConversation(OWNER_ID, { title: "client title" }),
     (error) => error instanceof CompanionConversationValidationError
       && error.code === "INVALID_REQUEST",
   );
@@ -45,36 +46,36 @@ test("conversation lists use bounded keyset pagination and opaque cursors", () =
   }));
   const service = createCompanionConversationService({
     conversationStore: {
-      listConversations(options) {
-        calls.push(options);
+      listConversations(ownerId, options) {
+        calls.push([ownerId, options]);
         return rows;
       },
     },
   });
 
-  const first = service.listConversations("00000000-0000-4000-8000-0000000000aa", );
+  const first = service.listConversations(OWNER_ID, );
   assert.equal(COMPANION_CONVERSATION_LIST_DEFAULT_LIMIT, 20);
   assert.equal(COMPANION_CONVERSATION_LIST_MAX_LIMIT, 100);
   assert.equal(first.conversations.length, 20);
   assert.equal(first.hasMore, true);
   assert.equal(typeof first.nextCursor, "string");
-  assert.deepEqual(calls[0], { limit: 21, after: null });
+  assert.deepEqual(calls[0], [OWNER_ID, { limit: 21, after: null }]);
 
-  service.listConversations("00000000-0000-4000-8000-0000000000aa", { limit: 20, cursor: first.nextCursor });
-  assert.deepEqual(calls[1], {
+  service.listConversations(OWNER_ID, { limit: 20, cursor: first.nextCursor });
+  assert.deepEqual(calls[1], [OWNER_ID, {
     limit: 21,
     after: {
       updatedAt: rows[19].updatedAt,
       id: rows[19].id,
     },
-  });
+  }]);
 
   assert.throws(
-    () => service.listConversations("00000000-0000-4000-8000-0000000000aa", { limit: 101 }),
+    () => service.listConversations(OWNER_ID, { limit: 101 }),
     (error) => error.code === "INVALID_REQUEST",
   );
   assert.throws(
-    () => service.listConversations("00000000-0000-4000-8000-0000000000aa", { cursor: "not-a-valid-cursor" }),
+    () => service.listConversations(OWNER_ID, { cursor: "not-a-valid-cursor" }),
     (error) => error.code === "INVALID_REQUEST",
   );
 });
@@ -87,21 +88,21 @@ test("conversation retrieval returns complete bounded history and rejects overfl
   const service = createCompanionConversationService({
     conversationStore: {
       getConversation() { return { id: ID, title: null }; },
-      getMessages(_id, options) {
-        calls.push(options);
+      getMessages(ownerId, id, options) {
+        calls.push([ownerId, id, options]);
         return messages;
       },
     },
   });
 
-  const result = service.getConversation("00000000-0000-4000-8000-0000000000aa", ID);
+  const result = service.getConversation(OWNER_ID, ID);
   assert.equal(COMPANION_CONVERSATION_MESSAGE_MAX_LIMIT, 200);
   assert.equal(result.messages.length, 200);
   assert.equal(result.messages[0].sequence, 1);
   assert.equal(result.messages.at(-1).sequence, 200);
-  assert.deepEqual(calls, [{ limit: 201 }]);
+  assert.deepEqual(calls, [[OWNER_ID, ID, { limit: 201 }]]);
   assert.throws(
-    () => service.getConversation("00000000-0000-4000-8000-0000000000aa", ID, { limit: 20 }),
+    () => service.getConversation(OWNER_ID, ID, { limit: 20 }),
     (error) => error.code === "INVALID_REQUEST",
   );
 
@@ -114,7 +115,7 @@ test("conversation retrieval returns complete bounded history and rejects overfl
     },
   });
   assert.throws(
-    () => overflow.getConversation(ID),
+    () => overflow.getConversation(OWNER_ID, ID),
     (error) => error.code === "CONTEXT_LIMIT_EXCEEDED",
   );
 });
@@ -131,8 +132,8 @@ test("persistent turn supplies chronological history and commits the authoritati
     conversationStore: {
       getConversation() { return { id: ID, title: null }; },
       getMessages() { return history; },
-      commitTurn(id, userContent, assistantContent) {
-        commitCalls.push([id, userContent, assistantContent]);
+      commitTurn(ownerId, id, userContent, assistantContent) {
+        commitCalls.push([ownerId, id, userContent, assistantContent]);
         return {
           userMessage: { sequence: 3, role: "user", content: userContent, createdAt: "u" },
           assistantMessage: { sequence: 4, role: "assistant", content: assistantContent, createdAt: "a" },
@@ -147,7 +148,7 @@ test("persistent turn supplies chronological history and commits the authoritati
     },
   });
 
-  const result = await service.sendMessage("00000000-0000-4000-8000-0000000000aa", ID, { message: "What was my test word?" });
+  const result = await service.sendMessage(OWNER_ID, ID, { message: "What was my test word?" });
 
   assert.equal(modelCalls.length, 1);
   assert.equal(modelCalls[0].role, "primary");
@@ -158,6 +159,7 @@ test("persistent turn supplies chronological history and commits the authoritati
     { role: "user", content: "What was my test word?" },
   ]);
   assert.deepEqual(commitCalls, [[
+    OWNER_ID,
     ID,
     "What was my test word?",
     "Your test word was heliotrope.",
@@ -181,7 +183,7 @@ test("model failure leaves persistent conversation history unchanged", async () 
   });
 
   await assert.rejects(
-    service.sendMessage("00000000-0000-4000-8000-0000000000aa", ID, { message: "Hello" }),
+    service.sendMessage(OWNER_ID, ID, { message: "Hello" }),
     (error) => error.code === "MODEL_UNAVAILABLE"
       && !String(error.message).includes("private model failure"),
   );
@@ -210,7 +212,7 @@ test("persistent turns reject a new pair when it would exceed the 200-message ce
     });
 
     await assert.rejects(
-      service.sendMessage("00000000-0000-4000-8000-0000000000aa", ID, { message: "Continue" }),
+      service.sendMessage(OWNER_ID, ID, { message: "Continue" }),
       (error) => error.code === "CONTEXT_LIMIT_EXCEEDED",
     );
     assert.equal(modelCalls, 0);
@@ -244,7 +246,7 @@ test("persistent turns allow the final pair that reaches exactly 200 messages", 
     },
   });
 
-  const result = await service.sendMessage("00000000-0000-4000-8000-0000000000aa", ID, { message: "final turn" });
+  const result = await service.sendMessage(OWNER_ID, ID, { message: "final turn" });
   assert.equal(commits, 1);
   assert.equal(result.userMessage.sequence, 199);
   assert.equal(result.assistantMessage.sequence, 200);
@@ -278,9 +280,9 @@ test("turns serialize per conversation so the next turn sees the prior commit", 
     },
   });
 
-  const first = service.sendMessage("00000000-0000-4000-8000-0000000000aa", ID, { message: "first" });
+  const first = service.sendMessage(OWNER_ID, ID, { message: "first" });
   await new Promise((resolve) => setImmediate(resolve));
-  const second = service.sendMessage("00000000-0000-4000-8000-0000000000aa", ID, { message: "second" });
+  const second = service.sendMessage(OWNER_ID, ID, { message: "second" });
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(modelCall, 1);
