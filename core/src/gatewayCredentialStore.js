@@ -573,6 +573,15 @@ function initializeSchema(database, generateOwnerId) {
           VALUES ('${PRIMARY_OWNER_SETTING_KEY}', '${primaryOwnerId}');
         DROP INDEX gateway_credentials_created_idx;
         DROP INDEX gateway_credentials_home_idx;
+        CREATE TABLE gateway_credential_capabilities_v2 (
+          credential_id TEXT NOT NULL,
+          capability TEXT NOT NULL
+            CHECK (capability IN ('chat', 'conversation:read', 'conversation:write')),
+          PRIMARY KEY (credential_id, capability)
+        ) STRICT;
+        INSERT INTO gateway_credential_capabilities_v2
+          SELECT credential_id, capability FROM gateway_credential_capabilities;
+        DROP TABLE gateway_credential_capabilities;
         CREATE TABLE gateway_credentials_v2 (
           id TEXT PRIMARY KEY NOT NULL,
           owner_id TEXT NOT NULL CHECK (length(owner_id) = 36),
@@ -591,6 +600,16 @@ function initializeSchema(database, generateOwnerId) {
           FROM gateway_credentials;
         DROP TABLE gateway_credentials;
         ALTER TABLE gateway_credentials_v2 RENAME TO gateway_credentials;
+        CREATE TABLE gateway_credential_capabilities (
+          credential_id TEXT NOT NULL
+            REFERENCES gateway_credentials(id) ON DELETE CASCADE,
+          capability TEXT NOT NULL
+            CHECK (capability IN ('chat', 'conversation:read', 'conversation:write')),
+          PRIMARY KEY (credential_id, capability)
+        ) STRICT;
+        INSERT INTO gateway_credential_capabilities
+          SELECT credential_id, capability FROM gateway_credential_capabilities_v2;
+        DROP TABLE gateway_credential_capabilities_v2;
         CREATE INDEX gateway_credentials_created_idx
           ON gateway_credentials(created_at DESC, id DESC);
         CREATE INDEX gateway_credentials_home_idx
