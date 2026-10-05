@@ -12,7 +12,7 @@ import {
 } from "./platformPaths.js";
 import { DatabaseSync } from "node:sqlite";
 
-export const GATEWAY_CREDENTIAL_SCHEMA_VERSION = 1;
+export const GATEWAY_CREDENTIAL_SCHEMA_VERSION = 2;
 export const GATEWAY_CREDENTIAL_DATABASE_FILENAME = "gateway-credentials.sqlite3";
 export const GATEWAY_CAPABILITIES = Object.freeze([
   "chat",
@@ -36,6 +36,7 @@ const CAPABILITY_ORDER = new Map(
 const CREATE_CREDENTIALS_TABLE_SQL = `
   CREATE TABLE gateway_credentials (
     id TEXT PRIMARY KEY NOT NULL,
+    owner_id TEXT NOT NULL,
     home_id TEXT NOT NULL
       CHECK (length(home_id) BETWEEN 1 AND 100 AND home_id = trim(home_id)),
     display_name TEXT NOT NULL
@@ -45,6 +46,12 @@ const CREATE_CREDENTIALS_TABLE_SQL = `
       CHECK (typeof(secret_digest) = 'blob' AND length(secret_digest) = ${DIGEST_BYTES}),
     created_at TEXT NOT NULL,
     revoked_at TEXT
+  ) STRICT
+`;
+const CREATE_SETTINGS_TABLE_SQL = `
+  CREATE TABLE gateway_settings (
+    key TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL
   ) STRICT
 `;
 const CREATE_CAPABILITIES_TABLE_SQL = `
@@ -64,6 +71,11 @@ const CREATE_HOME_INDEX_SQL = `
   CREATE INDEX gateway_credentials_home_idx
     ON gateway_credentials(home_id, created_at DESC, id DESC)
 `;
+const CREATE_OWNER_INDEX_SQL = `
+  CREATE INDEX gateway_credentials_owner_idx
+    ON gateway_credentials(owner_id, created_at DESC, id DESC)
+`;
+const PRIMARY_OWNER_SETTING_KEY = "primary_owner_id";
 
 export class GatewayCredentialStoreValidationError extends Error {
   constructor(message) {
@@ -130,6 +142,13 @@ function validateDatabasePath(databasePath) {
     );
   }
   return resolve(databasePath.trim());
+}
+
+function validateOwnerId(ownerId) {
+  if (typeof ownerId !== "string" || !UUID_PATTERN.test(ownerId.trim())) {
+    throw new GatewayCredentialStoreValidationError("Owner ID must be a UUID.");
+  }
+  return ownerId.trim().toLowerCase();
 }
 
 function validateCredentialId(credentialId) {
@@ -302,6 +321,7 @@ function verifySchema(database) {
   if (JSON.stringify(tables) !== JSON.stringify([
     "gateway_credential_capabilities",
     "gateway_credentials",
+    "gateway_settings",
   ])) {
     throw new GatewayCredentialStoreSchemaError(
       "Gateway credential database has an incompatible table set.",
@@ -311,11 +331,16 @@ function verifySchema(database) {
 
   assertTableShape(database, "gateway_credentials", [
     { name: "id", type: "TEXT", notnull: 1, pk: 1 },
+    { name: "owner_id", type: "TEXT", notnull: 1, pk: 0 },
     { name: "home_id", type: "TEXT", notnull: 1, pk: 0 },
     { name: "display_name", type: "TEXT", notnull: 1, pk: 0 },
     { name: "secret_digest", type: "BLOB", notnull: 1, pk: 0 },
     { name: "created_at", type: "TEXT", notnull: 1, pk: 0 },
     { name: "revoked_at", type: "TEXT", notnull: 0, pk: 0 },
+  ]);
+  assertTableShape(database, "gateway_settings", [
+    { name: "key", type: "TEXT", notnull: 1, pk: 1 },
+    { name: "value", type: "TEXT", notnull: 1, pk: 0 },
   ]);
   assertTableShape(database, "gateway_credential_capabilities", [
     { name: "credential_id", type: "TEXT", notnull: 1, pk: 1 },
@@ -327,6 +352,12 @@ function verifySchema(database) {
     "table",
     "gateway_credentials",
     CREATE_CREDENTIALS_TABLE_SQL,
+  );
+  assertSchemaObjectSql(
+    database,
+    "table",
+    "gateway_settings",
+    CREATE_SETTINGS_TABLE_SQL,
   );
   assertSchemaObjectSql(
     database,
@@ -346,14 +377,20 @@ function verifySchema(database) {
     "gateway_credentials_home_idx",
     CREATE_HOME_INDEX_SQL,
   );
+  assertSchemaObjectSql(
+    database,
+    "index",
+    "gateway_credentials_owner_idx",
+    CREATE_OWNER_INDEX_SQL,
+  );
 
   const strictTables = database.prepare(`
     SELECT name, strict
     FROM pragma_table_list
-    WHERE name IN ('gateway_credentials', 'gateway_credential_capabilities')
+    WHERE name IN ('gateway_credentials', 'gateway_credential_capabilities', 'gateway_settings')
     ORDER BY name
   `).all();
-  if (strictTables.length !== 2 || strictTables.some(({ strict }) => strict !== 1)) {
+  if (strictTables.length !== 3 || strictTables.some(({ strict }) => strict !== 1)) {
     throw new GatewayCredentialStoreSchemaError(
       "Gateway credential database tables must use strict typing.",
       GATEWAY_CREDENTIAL_SCHEMA_VERSION,
@@ -409,6 +446,16 @@ function verifySchema(database) {
   assertIndexStructure(
     database,
     "gateway_credentials",
+    "gateway_credentials_owner_idx",
+    [
+      { name: "owner_id", descending: 0, collation: "BINARY" },
+      { name: "created_at", descending: 1, collation: "BINARY" },
+      { name: "id", descending: 1, collation: "BINARY" },
+    ],
+  );
+  assertIndexStructure(
+    database,
+    "gateway_credentials",
     "gateway_credentials_home_idx",
     [
       { name: "home_id", descending: 0, collation: "BINARY" },
@@ -429,7 +476,8 @@ function verifySchema(database) {
     SELECT EXISTS (
       SELECT 1
       FROM gateway_credentials
-      WHERE typeof(secret_digest) != 'blob'
+      WHERE owner_id IS NULL OR length(owner_id) != 36
+        OR typeof(secret_digest) != 'blob'
         OR length(secret_digest) != ${DIGEST_BYTES}
         OR length(trim(home_id)) = 0
         OR length(trim(display_name)) = 0
@@ -445,6 +493,12 @@ function verifySchema(database) {
         FROM gateway_credential_capabilities AS capabilities
         WHERE capabilities.credential_id = credentials.id
       )
+    ) OR NOT EXISTS (
+      SELECT 1 FROM gateway_settings
+      WHERE key = 'primary_owner_id'
+    ) OR EXISTS (
+      SELECT 1 FROM gateway_settings
+      WHERE key != 'primary_owner_id' OR length(value) != 36
     ) AS invalid
   `).get().invalid;
   if (invalidData) {
@@ -455,14 +509,62 @@ function verifySchema(database) {
   }
 }
 
-function initializeSchema(database) {
+function initializeSchema(database, generateOwnerId) {
   const version = readSchemaVersion(database);
 
-  if (version !== 0 && version !== GATEWAY_CREDENTIAL_SCHEMA_VERSION) {
+  if (version > GATEWAY_CREDENTIAL_SCHEMA_VERSION) {
     throw new UnsupportedGatewayCredentialSchemaVersionError(version);
   }
 
   if (version === GATEWAY_CREDENTIAL_SCHEMA_VERSION) {
+    verifySchema(database);
+    return;
+  }
+
+  if (version === 1) {
+    const primaryOwnerId = validateOwnerId(generateOwnerId());
+    database.exec("BEGIN IMMEDIATE");
+    try {
+      database.exec(`
+        ALTER TABLE gateway_credentials ADD COLUMN owner_id TEXT;
+        UPDATE gateway_credentials SET owner_id = '${primaryOwnerId}';
+        CREATE TABLE gateway_settings (
+          key TEXT PRIMARY KEY NOT NULL,
+          value TEXT NOT NULL
+        ) STRICT;
+        INSERT INTO gateway_settings (key, value)
+          VALUES ('${PRIMARY_OWNER_SETTING_KEY}', '${primaryOwnerId}');
+        CREATE TABLE gateway_credentials_v2 (
+          id TEXT PRIMARY KEY NOT NULL,
+          owner_id TEXT NOT NULL,
+          home_id TEXT NOT NULL
+            CHECK (length(home_id) BETWEEN 1 AND 100 AND home_id = trim(home_id)),
+          display_name TEXT NOT NULL
+            CHECK (length(display_name) BETWEEN 1 AND ${MAX_DISPLAY_NAME_LENGTH}
+              AND display_name = trim(display_name)),
+          secret_digest BLOB NOT NULL
+            CHECK (typeof(secret_digest) = 'blob' AND length(secret_digest) = ${DIGEST_BYTES}),
+          created_at TEXT NOT NULL,
+          revoked_at TEXT
+        ) STRICT;
+        INSERT INTO gateway_credentials_v2
+          SELECT id, owner_id, home_id, display_name, secret_digest, created_at, revoked_at
+          FROM gateway_credentials;
+        DROP TABLE gateway_credentials;
+        ALTER TABLE gateway_credentials_v2 RENAME TO gateway_credentials;
+        CREATE INDEX gateway_credentials_created_idx
+          ON gateway_credentials(created_at DESC, id DESC);
+        CREATE INDEX gateway_credentials_home_idx
+          ON gateway_credentials(home_id, created_at DESC, id DESC);
+        CREATE INDEX gateway_credentials_owner_idx
+          ON gateway_credentials(owner_id, created_at DESC, id DESC);
+        PRAGMA user_version = 2;
+      `);
+      database.exec("COMMIT");
+    } catch (error) {
+      database.exec("ROLLBACK");
+      throw error;
+    }
     verifySchema(database);
     return;
   }
@@ -480,15 +582,20 @@ function initializeSchema(database) {
     );
   }
 
+  const primaryOwnerId = validateOwnerId(generateOwnerId());
   database.exec("BEGIN IMMEDIATE");
   try {
     database.exec(`
       ${CREATE_CREDENTIALS_TABLE_SQL};
+      ${CREATE_SETTINGS_TABLE_SQL};
       ${CREATE_CAPABILITIES_TABLE_SQL};
       ${CREATE_CREATED_INDEX_SQL};
       ${CREATE_HOME_INDEX_SQL};
+      ${CREATE_OWNER_INDEX_SQL};
+      INSERT INTO gateway_settings (key, value)
+        VALUES ('${PRIMARY_OWNER_SETTING_KEY}', '${primaryOwnerId}');
 
-      PRAGMA user_version = 1;
+      PRAGMA user_version = 2;
     `);
     database.exec("COMMIT");
   } catch (error) {
@@ -545,6 +652,7 @@ export function createGatewayCredentialStore({
   databasePath = resolveDefaultGatewayCredentialDatabasePath(),
   now = () => new Date(),
   generateId = randomUUID,
+  generateOwnerId = randomUUID,
   generateSecret = () => randomBytes(SECRET_BYTES),
 } = {}) {
   const resolvedDatabasePath = validateDatabasePath(databasePath);
@@ -558,7 +666,7 @@ export function createGatewayCredentialStore({
   try {
     database.exec("PRAGMA foreign_keys = ON");
     database.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
-    initializeSchema(database);
+    initializeSchema(database, generateOwnerId);
     database.exec("PRAGMA journal_mode = WAL");
   } catch (error) {
     database.close();
@@ -568,20 +676,23 @@ export function createGatewayCredentialStore({
 
   const insertCredential = database.prepare(`
     INSERT INTO gateway_credentials (
-      id, home_id, display_name, secret_digest, created_at, revoked_at
-    ) VALUES (?, ?, ?, ?, ?, NULL)
+      id, owner_id, home_id, display_name, secret_digest, created_at, revoked_at
+    ) VALUES (?, ?, ?, ?, ?, ?, NULL)
+  `);
+  const selectPrimaryOwner = database.prepare(`
+    SELECT value FROM gateway_settings WHERE key = ?
   `);
   const insertCapability = database.prepare(`
     INSERT INTO gateway_credential_capabilities (credential_id, capability)
     VALUES (?, ?)
   `);
   const selectCredentialForAuthentication = database.prepare(`
-    SELECT id, home_id, display_name, secret_digest, created_at, revoked_at
+    SELECT id, owner_id, home_id, display_name, secret_digest, created_at, revoked_at
     FROM gateway_credentials
     WHERE id = ?
   `);
   const selectCredentialRows = database.prepare(`
-    SELECT id, home_id, display_name, created_at, revoked_at
+    SELECT id, owner_id, home_id, display_name, created_at, revoked_at
     FROM gateway_credentials
     ORDER BY created_at DESC, id DESC
   `);
@@ -649,12 +760,25 @@ export function createGatewayCredentialStore({
   function mapCredential(row) {
     return Object.freeze({
       id: row.id,
+      ownerId: row.owner_id,
       homeId: row.home_id,
       displayName: row.display_name,
       createdAt: row.created_at,
       revokedAt: row.revoked_at,
       capabilities: Object.freeze(readCapabilities(row.id)),
     });
+  }
+
+  function getPrimaryOwnerId() {
+    ensureOpen();
+    const row = selectPrimaryOwner.get(PRIMARY_OWNER_SETTING_KEY);
+    if (!row) {
+      throw new GatewayCredentialStoreSchemaError(
+        "Gateway credential database is missing its primary owner identity.",
+        GATEWAY_CREDENTIAL_SCHEMA_VERSION,
+      );
+    }
+    return validateOwnerId(row.value);
   }
 
   function issueCredential(options = {}) {
@@ -664,7 +788,8 @@ export function createGatewayCredentialStore({
         "Credential issuance options must be an object.",
       );
     }
-    const { homeId, displayName, capabilities } = options;
+    const { homeId, displayName, capabilities, ownerId = getPrimaryOwnerId() } = options;
+    const normalizedOwnerId = validateOwnerId(ownerId);
     const normalizedHomeId = validateHomeId(homeId);
     const normalizedDisplayName = validateDisplayName(displayName);
     const normalizedCapabilities = validateCapabilities(capabilities);
@@ -678,6 +803,7 @@ export function createGatewayCredentialStore({
     runTransaction(() => {
       insertCredential.run(
         id,
+        normalizedOwnerId,
         normalizedHomeId,
         normalizedDisplayName,
         secretDigest,
@@ -692,6 +818,7 @@ export function createGatewayCredentialStore({
       bearerCredential,
       credential: Object.freeze({
         id,
+        ownerId: normalizedOwnerId,
         homeId: normalizedHomeId,
         displayName: normalizedDisplayName,
         createdAt,
@@ -724,6 +851,7 @@ export function createGatewayCredentialStore({
     const credential = mapCredential(row);
     return Object.freeze({
       credentialId: credential.id,
+      ownerId: credential.ownerId,
       homeId: credential.homeId,
       displayName: credential.displayName,
       createdAt: credential.createdAt,
@@ -751,6 +879,7 @@ export function createGatewayCredentialStore({
 
   return Object.freeze({
     databasePath: resolvedDatabasePath,
+    getPrimaryOwnerId,
     issueCredential,
     authenticateCredential,
     listCredentials,
