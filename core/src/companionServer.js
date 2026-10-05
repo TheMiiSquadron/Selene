@@ -211,14 +211,23 @@ function authenticateRequest(request, response, credentialStore) {
   }
 }
 
-function authorizeChat(request, response, credentialStore) {
+function authorizeCapabilities(
+  request,
+  response,
+  credentialStore,
+  requiredCapabilities,
+) {
   const identity = authenticateRequest(request, response, credentialStore);
   if (!identity) return false;
-  if (!identity.capabilities.includes("chat")) {
-    sendError(request, response, 403, "FORBIDDEN", "Chat access denied.");
+  if (!requiredCapabilities.every((capability) => identity.capabilities.includes(capability))) {
+    sendError(request, response, 403, "FORBIDDEN", "Access denied.");
     return false;
   }
   return true;
+}
+
+function authorizeChat(request, response, credentialStore) {
+  return authorizeCapabilities(request, response, credentialStore, ["chat"]);
 }
 
 function isJsonContentType(request) {
@@ -492,12 +501,39 @@ export function createCompanionServer({
     }
 
     const conversationMatch = url.pathname.match(/^\/api\/conversations\/([^/]+)$/);
-    if (url.pathname === "/api/conversations" || conversationMatch) {
+    const conversationMessagesMatch = url.pathname.match(
+      /^\/api\/conversations\/([^/]+)\/messages$/,
+    );
+    if (
+      url.pathname === "/api/conversations"
+      || conversationMatch
+      || conversationMessagesMatch
+    ) {
       if (!request.socket.encrypted) {
         sendNoStoreError(request, response, 426, "HTTPS_REQUIRED", "HTTPS is required.");
         return;
       }
-      if (!authenticateRequest(request, response, credentialStore)) return;
+      let requiredCapabilities = [];
+      if (request.method === "POST" && url.pathname === "/api/conversations") {
+        requiredCapabilities = ["conversation:write"];
+      } else if (
+        request.method === "GET"
+        && (url.pathname === "/api/conversations" || conversationMatch)
+      ) {
+        requiredCapabilities = ["conversation:read"];
+      } else if (request.method === "POST" && conversationMessagesMatch) {
+        requiredCapabilities = ["conversation:write", "chat"];
+      }
+
+      if (
+        requiredCapabilities.length > 0
+        && !authorizeCapabilities(
+          request,
+          response,
+          credentialStore,
+          requiredCapabilities,
+        )
+      ) return;
 
       if (request.method === "POST" && url.pathname === "/api/conversations") {
         await handleCreateConversation(request, response, getConversationService());
@@ -513,6 +549,16 @@ export function createCompanionServer({
           response,
           getConversationService(),
           decodeURIComponent(conversationMatch[1]),
+        );
+        return;
+      }
+      if (request.method === "POST" && conversationMessagesMatch) {
+        sendNoStoreError(
+          request,
+          response,
+          501,
+          "NOT_IMPLEMENTED",
+          "Persistent conversation messages are not implemented yet.",
         );
         return;
       }
