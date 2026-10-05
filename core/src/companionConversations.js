@@ -1,11 +1,18 @@
 import {
+  COMPANION_CHAT_SYSTEM_PROMPT,
+  CompanionChatValidationError,
+  validateCompanionChatMessage,
+} from "./companionChat.js";
+import {
   ConversationNotFoundError,
   ConversationStoreValidationError,
 } from "./conversationStore.js";
+import { modelService as defaultModelService } from "./modelService.js";
 
 export const COMPANION_CONVERSATION_LIST_DEFAULT_LIMIT = 20;
 export const COMPANION_CONVERSATION_LIST_MAX_LIMIT = 100;
 export const COMPANION_CONVERSATION_MESSAGE_MAX_LIMIT = 200;
+export const COMPANION_CONVERSATION_CONTEXT_MAX_MESSAGES = 200;
 
 export class CompanionConversationValidationError extends Error {
   constructor(code, message) {
@@ -60,6 +67,22 @@ function validateCursor(value) {
   return value;
 }
 
+function validateTurnPayload(payload) {
+  const body = requireObject(payload);
+  rejectUnknownKeys(body, new Set(["message"]));
+  try {
+    return validateCompanionChatMessage(body.message);
+  } catch (error) {
+    if (error instanceof CompanionChatValidationError) {
+      throw new CompanionConversationValidationError(
+        "INVALID_REQUEST",
+        "The request is invalid.",
+      );
+    }
+    throw error;
+  }
+}
+
 function mapStoreError(error) {
   if (error instanceof ConversationNotFoundError) {
     return new CompanionConversationValidationError(
@@ -76,7 +99,41 @@ function mapStoreError(error) {
   return error;
 }
 
-export function createCompanionConversationService({ conversationStore } = {}) {
+function extractAssistantReply(response) {
+  const content = response?.choices?.[0]?.message?.content;
+  if (typeof content !== "string" || !content.trim()) {
+    throw new CompanionConversationValidationError(
+      "MODEL_UNAVAILABLE",
+      "Selene is temporarily unavailable.",
+    );
+  }
+  return content.trim();
+}
+
+export function createCompanionConversationService({
+  conversationStore,
+  modelService = defaultModelService,
+} = {}) {
+  const turnQueues = new Map();
+
+  async function runSerializedTurn(conversationId, operation) {
+    const previous = turnQueues.get(conversationId) ?? Promise.resolve();
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const tail = previous.then(() => gate);
+    turnQueues.set(conversationId, tail);
+
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (turnQueues.get(conversationId) === tail) {
+        turnQueues.delete(conversationId);
+      }
+    }
+  }
+
   function createConversation(payload = {}) {
     const body = requireObject(payload);
     rejectUnknownKeys(body, new Set());
@@ -138,9 +195,74 @@ export function createCompanionConversationService({ conversationStore } = {}) {
     }
   }
 
+  async function sendMessage(conversationId, payload) {
+    const userContent = validateTurnPayload(payload);
+    requireStoreMethod(conversationStore, "getConversation");
+    requireStoreMethod(conversationStore, "getMessages");
+    requireStoreMethod(conversationStore, "commitTurn");
+    if (!modelService || typeof modelService.createChatCompletion !== "function") {
+      throw new Error("Model service unavailable.");
+    }
+
+    return runSerializedTurn(conversationId, async () => {
+      let conversation;
+      let history;
+      try {
+        conversation = conversationStore.getConversation(conversationId);
+        if (!conversation) throw new ConversationNotFoundError(conversationId);
+        history = conversationStore.getMessages(conversationId);
+      } catch (error) {
+        throw mapStoreError(error);
+      }
+
+      if (history.length > COMPANION_CONVERSATION_CONTEXT_MAX_MESSAGES) {
+        throw new CompanionConversationValidationError(
+          "CONTEXT_LIMIT_EXCEEDED",
+          "Conversation context limit exceeded.",
+        );
+      }
+
+      let response;
+      try {
+        response = await modelService.createChatCompletion({
+          role: "primary",
+          messages: [
+            { role: "system", content: COMPANION_CHAT_SYSTEM_PROMPT },
+            ...history.map(({ role, content }) => ({ role, content })),
+            { role: "user", content: userContent },
+          ],
+          toolChoice: "none",
+        });
+      } catch {
+        throw new CompanionConversationValidationError(
+          "MODEL_UNAVAILABLE",
+          "Selene is temporarily unavailable.",
+        );
+      }
+
+      const assistantContent = extractAssistantReply(response);
+
+      try {
+        const { userMessage, assistantMessage } = conversationStore.commitTurn(
+          conversation.id,
+          userContent,
+          assistantContent,
+        );
+        return Object.freeze({
+          conversationId: conversation.id,
+          userMessage,
+          assistantMessage,
+        });
+      } catch (error) {
+        throw mapStoreError(error);
+      }
+    });
+  }
+
   return Object.freeze({
     createConversation,
     listConversations,
     getConversation,
+    sendMessage,
   });
 }
