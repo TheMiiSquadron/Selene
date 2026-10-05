@@ -408,6 +408,110 @@ test("owner namespaces isolate discovery, reads, writes, and pagination", async 
   }
 });
 
+test("version 1 migration fails closed on malformed historical schema", async () => {
+  const databasePath = await createTempDatabasePath();
+  const database = new DatabaseSync(databasePath);
+  database.exec(`
+    CREATE TABLE conversations (
+      id TEXT PRIMARY KEY NOT NULL,
+      title TEXT,
+      created_at TEXT NOT NULL
+    ) STRICT;
+    CREATE TABLE messages (
+      id TEXT PRIMARY KEY NOT NULL,
+      conversation_id TEXT NOT NULL,
+      sequence INTEGER NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    ) STRICT;
+    PRAGMA user_version = 1;
+  `);
+  database.close();
+
+  assert.throws(
+    () => createConversationStore({ primaryOwnerId: PRIMARY_OWNER_ID, databasePath }),
+    ConversationStoreSchemaError,
+  );
+
+  const unchanged = new DatabaseSync(databasePath);
+  try {
+    assert.equal(unchanged.prepare("PRAGMA user_version").get().user_version, 1);
+    assert.deepEqual(
+      unchanged.prepare("PRAGMA table_info(conversations)").all().map(({ name }) => name),
+      ["id", "title", "created_at"],
+    );
+  } finally {
+    unchanged.close();
+  }
+});
+
+test("current schema fails closed on malformed ownership structure or data", async () => {
+  const malformedSchemaPath = await createTempDatabasePath();
+  let database = new DatabaseSync(malformedSchemaPath);
+  database.exec(`
+    CREATE TABLE conversations (
+      id TEXT PRIMARY KEY NOT NULL,
+      owner_id TEXT NOT NULL,
+      title TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+    CREATE TABLE messages (
+      id TEXT PRIMARY KEY NOT NULL,
+      conversation_id TEXT NOT NULL,
+      sequence INTEGER NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    ) STRICT;
+    PRAGMA user_version = 2;
+  `);
+  database.close();
+  assert.throws(
+    () => createConversationStore({ primaryOwnerId: PRIMARY_OWNER_ID, databasePath: malformedSchemaPath }),
+    ConversationStoreSchemaError,
+  );
+
+  const invalidOwnerPath = await createTempDatabasePath();
+  database = new DatabaseSync(invalidOwnerPath);
+  database.exec(`
+    CREATE TABLE conversations (
+      id TEXT PRIMARY KEY NOT NULL,
+      owner_id TEXT NOT NULL CHECK (length(owner_id) = 36),
+      title TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+    CREATE TABLE messages (
+      id TEXT PRIMARY KEY NOT NULL,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      sequence INTEGER NOT NULL CHECK (sequence >= 1),
+      role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+      content TEXT NOT NULL CHECK (length(content) > 0),
+      created_at TEXT NOT NULL,
+      UNIQUE (conversation_id, sequence)
+    ) STRICT;
+    CREATE INDEX conversations_owner_updated_idx
+      ON conversations(owner_id, updated_at DESC, id DESC);
+    CREATE INDEX messages_conversation_order_idx
+      ON messages(conversation_id, sequence);
+    INSERT INTO conversations VALUES (
+      '00000000-0000-4000-8000-000000000011',
+      'zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz',
+      NULL,
+      '2026-01-01T00:00:00.000Z',
+      '2026-01-01T00:00:00.000Z'
+    );
+    PRAGMA user_version = 2;
+  `);
+  database.close();
+  assert.throws(
+    () => createConversationStore({ primaryOwnerId: PRIMARY_OWNER_ID, databasePath: invalidOwnerPath }),
+    ConversationStoreSchemaError,
+  );
+});
+
 test("future schema versions are rejected without modifying their data", async () => {
   const databasePath = await createTempDatabasePath();
   let database = new DatabaseSync(databasePath);
