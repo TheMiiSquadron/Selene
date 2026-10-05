@@ -414,3 +414,51 @@ test("failed completed-turn persistence rolls back both messages", async () => {
     store.close();
   }
 });
+
+
+test("conversation listing performs bounded deterministic keyset reads", async () => {
+  const databasePath = await createTempDatabasePath();
+  const times = [
+    new Date("2026-10-05T12:00:00.000Z"),
+    new Date("2026-10-05T12:00:01.000Z"),
+    new Date("2026-10-05T12:00:02.000Z"),
+  ];
+  const store = createConversationStore({ databasePath, now: sequence(times) });
+
+  try {
+    const firstCreated = store.createConversation();
+    const secondCreated = store.createConversation();
+    const thirdCreated = store.createConversation();
+
+    const firstPage = store.listConversations({ limit: 2 });
+    assert.deepEqual(firstPage.map(({ id }) => id), [thirdCreated.id, secondCreated.id]);
+
+    const secondPage = store.listConversations({
+      limit: 2,
+      after: {
+        updatedAt: firstPage.at(-1).updatedAt,
+        id: firstPage.at(-1).id,
+      },
+    });
+    assert.deepEqual(secondPage.map(({ id }) => id), [firstCreated.id]);
+  } finally {
+    store.close();
+  }
+});
+
+test("message retrieval applies its bound inside the store", async () => {
+  const databasePath = await createTempDatabasePath();
+  const store = createConversationStore({ databasePath });
+
+  try {
+    const conversation = store.createConversation();
+    store.addUserMessage(conversation.id, "one");
+    store.addAssistantMessage(conversation.id, "two");
+    store.addUserMessage(conversation.id, "three");
+
+    const messages = store.getMessages(conversation.id, { limit: 2 });
+    assert.deepEqual(messages.map(({ sequence }) => sequence), [1, 2]);
+  } finally {
+    store.close();
+  }
+});
