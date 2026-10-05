@@ -525,15 +525,12 @@ export function createCompanionServer({
         requiredCapabilities = ["conversation:write", "chat"];
       }
 
-      if (
-        requiredCapabilities.length > 0
-        && !authorizeCapabilities(
-          request,
-          response,
-          credentialStore,
-          requiredCapabilities,
-        )
-      ) return;
+      if (!authorizeCapabilities(
+        request,
+        response,
+        credentialStore,
+        requiredCapabilities,
+      )) return;
 
       if (request.method === "POST" && url.pathname === "/api/conversations") {
         await handleCreateConversation(request, response, getConversationService());
