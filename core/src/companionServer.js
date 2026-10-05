@@ -221,9 +221,9 @@ function authorizeCapabilities(
   if (!identity) return false;
   if (!requiredCapabilities.every((capability) => identity.capabilities.includes(capability))) {
     sendError(request, response, 403, "FORBIDDEN", "Access denied.");
-    return false;
+    return null;
   }
-  return true;
+  return identity;
 }
 
 function authorizeChat(request, response, credentialStore) {
@@ -346,7 +346,7 @@ function sendConversationError(request, response, error) {
   );
 }
 
-async function handleCreateConversation(request, response, conversationService) {
+async function handleCreateConversation(request, response, conversationService, ownerId) {
   if (!isJsonContentType(request)) {
     sendNoStoreError(
       request,
@@ -365,7 +365,7 @@ async function handleCreateConversation(request, response, conversationService) 
     return;
   }
   try {
-    sendNoStoreJson(request, response, 201, conversationService.createConversation(payload));
+    sendNoStoreJson(request, response, 201, conversationService.createConversation(ownerId, payload));
   } catch (error) {
     sendConversationError(request, response, error);
   }
@@ -382,10 +382,10 @@ function assertAllowedQueryParameters(searchParams, allowed) {
   }
 }
 
-function handleListConversations(request, response, conversationService, searchParams) {
+function handleListConversations(request, response, conversationService, ownerId, searchParams) {
   try {
     assertAllowedQueryParameters(searchParams, new Set(["limit", "cursor"]));
-    sendNoStoreJson(request, response, 200, conversationService.listConversations({
+    sendNoStoreJson(request, response, 200, conversationService.listConversations(ownerId, {
       limit: searchParams.get("limit") ?? undefined,
       cursor: searchParams.get("cursor") ?? undefined,
     }));
@@ -394,14 +394,14 @@ function handleListConversations(request, response, conversationService, searchP
   }
 }
 
-function handleGetConversation(request, response, conversationService, conversationId, searchParams) {
+function handleGetConversation(request, response, conversationService, ownerId, conversationId, searchParams) {
   try {
     assertAllowedQueryParameters(searchParams, new Set());
     sendNoStoreJson(
       request,
       response,
       200,
-      conversationService.getConversation(conversationId),
+      conversationService.getConversation(ownerId, conversationId),
     );
   } catch (error) {
     sendConversationError(request, response, error);
@@ -412,6 +412,7 @@ async function handleConversationMessage(
   request,
   response,
   conversationService,
+  ownerId,
   conversationId,
 ) {
   if (!isJsonContentType(request)) {
@@ -434,7 +435,7 @@ async function handleConversationMessage(
   }
 
   try {
-    const result = await conversationService.sendMessage(conversationId, payload);
+    const result = await conversationService.sendMessage(ownerId, conversationId, payload);
     sendNoStoreJson(request, response, 200, result);
   } catch (error) {
     sendConversationError(request, response, error);
@@ -582,19 +583,25 @@ export function createCompanionServer({
         requiredCapabilities = ["conversation:write", "chat"];
       }
 
-      if (!authorizeCapabilities(
+      const identity = authorizeCapabilities(
         request,
         response,
         credentialStore,
         requiredCapabilities,
-      )) return;
+      );
+      if (!identity) return;
+      const ownerId = identity.ownerId;
+      if (typeof ownerId !== "string" || !ownerId) {
+        sendNoStoreError(request, response, 401, "UNAUTHORIZED", "Authentication required.");
+        return;
+      }
 
       if (request.method === "POST" && url.pathname === "/api/conversations") {
-        await handleCreateConversation(request, response, getConversationService());
+        await handleCreateConversation(request, response, getConversationService(), ownerId);
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/conversations") {
-        handleListConversations(request, response, getConversationService(), url.searchParams);
+        handleListConversations(request, response, getConversationService(), ownerId, url.searchParams);
         return;
       }
       if (request.method === "GET" && conversationMatch) {
@@ -615,6 +622,7 @@ export function createCompanionServer({
           request,
           response,
           getConversationService(),
+          ownerId,
           conversationId,
           url.searchParams,
         );
@@ -638,6 +646,7 @@ export function createCompanionServer({
           request,
           response,
           getConversationService(),
+          ownerId,
           conversationId,
         );
         return;
