@@ -369,6 +369,7 @@ function issueHomeCredential(store, { displayName }) {
     bearerCredential: issued.bearerCredential,
     credential: Object.freeze({
       id: issued.credential.id,
+      ownerId: issued.credential.ownerId,
       homeId: issued.credential.homeId,
       displayName: issued.credential.displayName,
       capabilities: Object.freeze([...issued.credential.capabilities]),
