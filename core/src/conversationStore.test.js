@@ -99,13 +99,13 @@ test("conversations have generated UUIDs and stable UTC timestamps", async () =>
       updatedAt: instant.toISOString(),
     });
     assert.deepEqual(store.getConversation(created.id), created);
-    assert.deepEqual(store.listConversations(), [created]);
+    assert.deepEqual(store.listConversations({ limit: 20 }), [created]);
   } finally {
     store.close();
   }
 });
 
-test("conversation listing is deterministic by update time, creation time, and ID", async () => {
+test("conversation listing is deterministic by update time and ID", async () => {
   const databasePath = await createTempDatabasePath();
   const ids = [
     "00000000-0000-4000-8000-000000000001",
@@ -128,7 +128,7 @@ test("conversation listing is deterministic by update time, creation time, and I
     store.addUserMessage(first.id, "Updated later");
 
     assert.deepEqual(
-      store.listConversations().map(({ id }) => id),
+      store.listConversations({ limit: 20 }).map(({ id }) => id),
       [first.id, second.id],
     );
   } finally {
