@@ -3,7 +3,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import {
   PlatformPathValidationError,
-  resolveSeleneProductionDataDirectory,
+  resolveSeleneProductionPath,
 } from "./platformPaths.js";
 import { DatabaseSync } from "node:sqlite";
 
@@ -59,8 +59,8 @@ export function resolveDefaultConversationDatabasePath(
   platform = process.platform,
 ) {
   try {
-    return resolve(
-      resolveSeleneProductionDataDirectory({ platform, env }),
+    return resolveSeleneProductionPath(
+      { platform, env },
       "data",
       CONVERSATION_DATABASE_FILENAME,
     );
