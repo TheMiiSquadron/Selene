@@ -30,10 +30,12 @@ const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../.."
 const TEST_TLS = makeTestCertificate();
 const testTlsPorts = new Map();
 const TEST_BEARER = "test-gateway-credential";
+const TEST_OWNER_ID = "00000000-0000-4000-8000-0000000000aa";
 const testCredentialStore = {
   authenticateCredential(value) {
     if (value !== TEST_BEARER) throw new Error("Invalid test credential.");
     return {
+      ownerId: TEST_OWNER_ID,
       capabilities: ["chat", "conversation:read", "conversation:write"],
     };
   },
@@ -1120,16 +1122,16 @@ test("Conversation API creates, lists, and retrieves through the Gateway boundar
     updatedAt: "2026-10-05T00:00:00.000Z",
   };
   const conversationService = {
-    createConversation(payload) {
-      calls.push(["create", payload]);
+    createConversation(ownerId, payload) {
+      calls.push(["create", ownerId, payload]);
       return { ok: true, conversation };
     },
-    listConversations() {
-      calls.push(["list"]);
+    listConversations(ownerId) {
+      calls.push(["list", ownerId]);
       return { ok: true, conversations: [conversation], hasMore: false };
     },
-    getConversation(id) {
-      calls.push(["get", id]);
+    getConversation(ownerId, id) {
+      calls.push(["get", ownerId, id]);
       return { ok: true, conversation, messages: [] };
     },
   };
@@ -1161,9 +1163,9 @@ test("Conversation API creates, lists, and retrieves through the Gateway boundar
     assert.equal(retrieved.statusCode, 200);
     assert.equal(created.headers["cache-control"], "no-store");
     assert.deepEqual(calls, [
-      ["create", {}],
-      ["list"],
-      ["get", conversation.id],
+      ["create", TEST_OWNER_ID, {}],
+      ["list", TEST_OWNER_ID],
+      ["get", TEST_OWNER_ID, conversation.id],
     ]);
   } finally {
     await close(server);
@@ -1274,7 +1276,7 @@ test("Conversation API enforces read and write capabilities before service acces
     authenticateCredential(value) {
       const capabilities = capabilitiesByCredential[value];
       if (!capabilities) throw new Error("Invalid credential.");
-      return { capabilities };
+      return { ownerId: TEST_OWNER_ID, capabilities };
     },
   };
   const server = createCompanionServer({ conversationService, credentialStore });
@@ -1334,8 +1336,8 @@ test("Conversation API enforces read and write capabilities before service acces
 test("Persistent message route requires both write and chat capabilities", async () => {
   const calls = [];
   const conversationService = {
-    async sendMessage(id, payload) {
-      calls.push([id, payload]);
+    async sendMessage(ownerId, id, payload) {
+      calls.push([ownerId, id, payload]);
       return {
         conversationId: id,
         userMessage: { sequence: 1, role: "user", content: payload.message },
@@ -1345,10 +1347,11 @@ test("Persistent message route requires both write and chat capabilities", async
   };
   const credentialStore = {
     authenticateCredential(value) {
-      if (value === "write-only") return { capabilities: ["conversation:write"] };
-      if (value === "chat-only") return { capabilities: ["chat"] };
+      if (value === "write-only") return { ownerId: TEST_OWNER_ID, capabilities: ["conversation:write"] };
+      if (value === "chat-only") return { ownerId: TEST_OWNER_ID, capabilities: ["chat"] };
       if (value === "full-home") {
         return {
+          ownerId: TEST_OWNER_ID,
           capabilities: ["chat", "conversation:read", "conversation:write"],
         };
       }
@@ -1388,7 +1391,7 @@ test("Persistent message route requires both write and chat capabilities", async
     });
     assert.equal(allowed.statusCode, 200);
     assert.equal(JSON.parse(allowed.body).assistantMessage.content, "Hello.");
-    assert.deepEqual(calls, [[conversationId, { message: "Hello" }]]);
+    assert.deepEqual(calls, [[TEST_OWNER_ID, conversationId, { message: "Hello" }]]);
   } finally {
     await close(server);
   }
