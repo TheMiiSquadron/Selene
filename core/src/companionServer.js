@@ -327,7 +327,13 @@ async function handleChat(request, response, chatHandler) {
 
 function sendConversationError(request, response, error) {
   if (error instanceof CompanionConversationValidationError) {
-    const statusCode = error.code === "CONVERSATION_NOT_FOUND" ? 404 : 400;
+    const statusCodes = {
+      INVALID_REQUEST: 400,
+      CONVERSATION_NOT_FOUND: 404,
+      CONTEXT_LIMIT_EXCEEDED: 409,
+      MODEL_UNAVAILABLE: 503,
+    };
+    const statusCode = statusCodes[error.code] ?? 400;
     sendNoStoreError(request, response, statusCode, error.code, error.message);
     return;
   }
@@ -387,6 +393,39 @@ function handleGetConversation(request, response, conversationService, conversat
         cursor: searchParams.get("cursor") ?? undefined,
       }),
     );
+  } catch (error) {
+    sendConversationError(request, response, error);
+  }
+}
+
+async function handleConversationMessage(
+  request,
+  response,
+  conversationService,
+  conversationId,
+) {
+  if (!isJsonContentType(request)) {
+    sendNoStoreError(
+      request,
+      response,
+      415,
+      "UNSUPPORTED_CONTENT_TYPE",
+      "Content-Type must be application/json.",
+    );
+    return;
+  }
+
+  let payload;
+  try {
+    payload = await readJsonBody(request);
+  } catch {
+    sendNoStoreError(request, response, 400, "INVALID_REQUEST", "The request is invalid.");
+    return;
+  }
+
+  try {
+    const result = await conversationService.sendMessage(conversationId, payload);
+    sendNoStoreJson(request, response, 200, result);
   } catch (error) {
     sendConversationError(request, response, error);
   }
@@ -557,12 +596,24 @@ export function createCompanionServer({
         return;
       }
       if (request.method === "POST" && conversationMessagesMatch) {
-        sendNoStoreError(
+        let conversationId;
+        try {
+          conversationId = decodeURIComponent(conversationMessagesMatch[1]);
+        } catch {
+          sendNoStoreError(
+            request,
+            response,
+            400,
+            "INVALID_REQUEST",
+            "The request is invalid.",
+          );
+          return;
+        }
+        await handleConversationMessage(
           request,
           response,
-          501,
-          "NOT_IMPLEMENTED",
-          "Persistent conversation messages are not implemented yet.",
+          getConversationService(),
+          conversationId,
         );
         return;
       }
