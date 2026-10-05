@@ -1115,7 +1115,7 @@ test("Conversation API creates, lists, and retrieves through the Gateway boundar
   const calls = [];
   const conversation = {
     id: "00000000-0000-4000-8000-000000000001",
-    title: "M4.1",
+    title: null,
     createdAt: "2026-10-05T00:00:00.000Z",
     updatedAt: "2026-10-05T00:00:00.000Z",
   };
@@ -1126,7 +1126,7 @@ test("Conversation API creates, lists, and retrieves through the Gateway boundar
     },
     listConversations() {
       calls.push(["list"]);
-      return { ok: true, conversations: [conversation], limit: 50 };
+      return { ok: true, conversations: [conversation], hasMore: false };
     },
     getConversation(id) {
       calls.push(["get", id]);
@@ -1143,7 +1143,7 @@ test("Conversation API creates, lists, and retrieves through the Gateway boundar
       method: "POST",
       path: "/api/conversations",
       headers: { ...authorization, "Content-Type": "application/json" },
-      body: { title: "M4.1" },
+      body: {},
     });
     const listed = await request({
       port,
@@ -1161,7 +1161,7 @@ test("Conversation API creates, lists, and retrieves through the Gateway boundar
     assert.equal(retrieved.statusCode, 200);
     assert.equal(created.headers["cache-control"], "no-store");
     assert.deepEqual(calls, [
-      ["create", { title: "M4.1" }],
+      ["create", {}],
       ["list"],
       ["get", conversation.id],
     ]);
@@ -1173,7 +1173,7 @@ test("Conversation API creates, lists, and retrieves through the Gateway boundar
 test("Conversation API requires HTTPS and authentication", async () => {
   const conversationService = {
     listConversations() {
-      return { ok: true, conversations: [], limit: 50 };
+      return { ok: true, conversations: [], hasMore: false };
     },
   };
   const plaintext = createCompanionServerUnderTest({
@@ -1212,7 +1212,7 @@ test("Conversation API preserves sanitized validation and not-found errors", asy
     createConversation() {
       throw new CompanionConversationValidationError(
         "INVALID_REQUEST",
-        "Conversation title must not be empty.",
+        "The request is invalid.",
       );
     },
     getConversation() {
@@ -1232,7 +1232,7 @@ test("Conversation API preserves sanitized validation and not-found errors", asy
       method: "POST",
       path: "/api/conversations",
       headers: { ...authorization, "Content-Type": "application/json" },
-      body: { title: "" },
+      body: { title: "client title" },
     });
     const missing = await request({
       port,
@@ -1258,7 +1258,7 @@ test("Conversation API enforces read and write capabilities before service acces
     },
     listConversations() {
       calls.push("list");
-      return { ok: true, conversations: [], limit: 50 };
+      return { ok: true, conversations: [], hasMore: false };
     },
     getConversation() {
       calls.push("get");
