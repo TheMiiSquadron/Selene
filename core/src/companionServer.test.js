@@ -33,7 +33,9 @@ const TEST_BEARER = "test-gateway-credential";
 const testCredentialStore = {
   authenticateCredential(value) {
     if (value !== TEST_BEARER) throw new Error("Invalid test credential.");
-    return { capabilities: ["chat"] };
+    return {
+      capabilities: ["chat", "conversation:read", "conversation:write"],
+    };
   },
 };
 
@@ -1241,6 +1243,138 @@ test("Conversation API preserves sanitized validation and not-found errors", asy
     assert.equal(JSON.parse(invalid.body).error.code, "INVALID_REQUEST");
     assert.equal(missing.statusCode, 404);
     assert.equal(JSON.parse(missing.body).error.code, "CONVERSATION_NOT_FOUND");
+  } finally {
+    await close(server);
+  }
+});
+
+
+test("Conversation API enforces read and write capabilities before service access", async () => {
+  const calls = [];
+  const conversationService = {
+    createConversation() {
+      calls.push("create");
+      return { ok: true, conversation: {} };
+    },
+    listConversations() {
+      calls.push("list");
+      return { ok: true, conversations: [], limit: 50 };
+    },
+    getConversation() {
+      calls.push("get");
+      return { ok: true, conversation: {}, messages: [] };
+    },
+  };
+  const capabilitiesByCredential = {
+    "read-only": ["conversation:read"],
+    "write-only": ["conversation:write"],
+    "chat-only": ["chat"],
+  };
+  const credentialStore = {
+    authenticateCredential(value) {
+      const capabilities = capabilitiesByCredential[value];
+      if (!capabilities) throw new Error("Invalid credential.");
+      return { capabilities };
+    },
+  };
+  const server = createCompanionServer({ conversationService, credentialStore });
+  const port = await listen(server);
+
+  async function authorizedRequest(credential, options = {}) {
+    return request({
+      port,
+      headers: {
+        Authorization: `Bearer ${credential}`,
+        ...(options.headers ?? {}),
+      },
+      ...options,
+    });
+  }
+
+  try {
+    const readList = await authorizedRequest("read-only", {
+      path: "/api/conversations",
+    });
+    assert.equal(readList.statusCode, 200);
+
+    const readCreate = await authorizedRequest("read-only", {
+      method: "POST",
+      path: "/api/conversations",
+      headers: { "Content-Type": "application/json" },
+      body: {},
+    });
+    assert.equal(readCreate.statusCode, 403);
+    assert.equal(JSON.parse(readCreate.body).error.code, "FORBIDDEN");
+
+    const writeCreate = await authorizedRequest("write-only", {
+      method: "POST",
+      path: "/api/conversations",
+      headers: { "Content-Type": "application/json" },
+      body: {},
+    });
+    assert.equal(writeCreate.statusCode, 201);
+
+    const writeRead = await authorizedRequest("write-only", {
+      path: "/api/conversations",
+    });
+    assert.equal(writeRead.statusCode, 403);
+
+    const chatRead = await authorizedRequest("chat-only", {
+      path: "/api/conversations",
+    });
+    assert.equal(chatRead.statusCode, 403);
+
+    assert.deepEqual(calls, ["list", "create"]);
+  } finally {
+    await close(server);
+  }
+});
+
+test("Persistent message route requires both write and chat capabilities", async () => {
+  const calls = [];
+  const conversationService = {
+    createConversation() {
+      calls.push("unexpected");
+      return { ok: true, conversation: {} };
+    },
+  };
+  const credentialStore = {
+    authenticateCredential(value) {
+      if (value === "write-only") return { capabilities: ["conversation:write"] };
+      if (value === "chat-only") return { capabilities: ["chat"] };
+      if (value === "full-home") {
+        return {
+          capabilities: ["chat", "conversation:read", "conversation:write"],
+        };
+      }
+      throw new Error("Invalid credential.");
+    },
+  };
+  const server = createCompanionServer({ conversationService, credentialStore });
+  const port = await listen(server);
+  const path = "/api/conversations/00000000-0000-4000-8000-000000000001/messages";
+
+  try {
+    for (const credential of ["write-only", "chat-only"]) {
+      const denied = await request({
+        port,
+        method: "POST",
+        path,
+        headers: { Authorization: `Bearer ${credential}` },
+      });
+      assert.equal(denied.statusCode, 403);
+      assert.equal(JSON.parse(denied.body).error.code, "FORBIDDEN");
+    }
+
+    const allowed = await request({
+      port,
+      method: "POST",
+      path,
+      headers: { Authorization: "Bearer full-home" },
+    });
+    assert.equal(allowed.statusCode, 501);
+    assert.equal(JSON.parse(allowed.body).error.code, "NOT_IMPLEMENTED");
+    assert.deepEqual(calls, []);
   } finally {
     await close(server);
   }
