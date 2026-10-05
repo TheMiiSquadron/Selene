@@ -371,8 +371,20 @@ async function handleCreateConversation(request, response, conversationService) 
   }
 }
 
+function assertAllowedQueryParameters(searchParams, allowed) {
+  for (const key of searchParams.keys()) {
+    if (!allowed.has(key)) {
+      throw new CompanionConversationValidationError(
+        "INVALID_REQUEST",
+        "The request is invalid.",
+      );
+    }
+  }
+}
+
 function handleListConversations(request, response, conversationService, searchParams) {
   try {
+    assertAllowedQueryParameters(searchParams, new Set(["limit", "cursor"]));
     sendNoStoreJson(request, response, 200, conversationService.listConversations({
       limit: searchParams.get("limit") ?? undefined,
       cursor: searchParams.get("cursor") ?? undefined,
@@ -384,14 +396,12 @@ function handleListConversations(request, response, conversationService, searchP
 
 function handleGetConversation(request, response, conversationService, conversationId, searchParams) {
   try {
+    assertAllowedQueryParameters(searchParams, new Set());
     sendNoStoreJson(
       request,
       response,
       200,
-      conversationService.getConversation(conversationId, {
-        limit: searchParams.get("limit") ?? undefined,
-        cursor: searchParams.get("cursor") ?? undefined,
-      }),
+      conversationService.getConversation(conversationId),
     );
   } catch (error) {
     sendConversationError(request, response, error);
@@ -586,11 +596,24 @@ export function createCompanionServer({
         return;
       }
       if (request.method === "GET" && conversationMatch) {
+        let conversationId;
+        try {
+          conversationId = decodeURIComponent(conversationMatch[1]);
+        } catch {
+          sendNoStoreError(
+            request,
+            response,
+            400,
+            "INVALID_REQUEST",
+            "The request is invalid.",
+          );
+          return;
+        }
         handleGetConversation(
           request,
           response,
           getConversationService(),
-          decodeURIComponent(conversationMatch[1]),
+          conversationId,
           url.searchParams,
         );
         return;
