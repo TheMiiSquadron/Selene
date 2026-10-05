@@ -36,7 +36,7 @@ const CAPABILITY_ORDER = new Map(
 const CREATE_CREDENTIALS_TABLE_SQL = `
   CREATE TABLE gateway_credentials (
     id TEXT PRIMARY KEY NOT NULL,
-    owner_id TEXT NOT NULL,
+    owner_id TEXT NOT NULL CHECK (length(owner_id) = 36),
     home_id TEXT NOT NULL
       CHECK (length(home_id) BETWEEN 1 AND 100 AND home_id = trim(home_id)),
     display_name TEXT NOT NULL
@@ -244,7 +244,8 @@ function normalizeSchemaSql(sql) {
     .replace(/\s+/gu, " ")
     .trim()
     .replace(/;$/u, "")
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/^create table "gateway_credentials"/u, "create table gateway_credentials");
 }
 
 function assertSchemaObjectSql(database, type, name, expectedSql) {
@@ -536,7 +537,7 @@ function initializeSchema(database, generateOwnerId) {
           VALUES ('${PRIMARY_OWNER_SETTING_KEY}', '${primaryOwnerId}');
         CREATE TABLE gateway_credentials_v2 (
           id TEXT PRIMARY KEY NOT NULL,
-          owner_id TEXT NOT NULL,
+          owner_id TEXT NOT NULL CHECK (length(owner_id) = 36),
           home_id TEXT NOT NULL
             CHECK (length(home_id) BETWEEN 1 AND 100 AND home_id = trim(home_id)),
           display_name TEXT NOT NULL
