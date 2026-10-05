@@ -188,32 +188,66 @@ test("model failure leaves persistent conversation history unchanged", async () 
   assert.equal(commits, 0);
 });
 
-test("persistent turns fail cleanly above the 200-message context bound", async () => {
-  let modelCalls = 0;
+test("persistent turns reject a new pair when it would exceed the 200-message ceiling", async () => {
+  for (const historyLength of [199, 200, 201]) {
+    let modelCalls = 0;
+    let commits = 0;
+    const service = createCompanionConversationService({
+      conversationStore: {
+        getConversation() { return { id: ID }; },
+        getMessages() {
+          return Array.from({ length: historyLength }, (_, index) => ({
+            sequence: index + 1,
+            role: index % 2 === 0 ? "user" : "assistant",
+            content: `message ${index + 1}`,
+          }));
+        },
+        commitTurn() { commits += 1; },
+      },
+      modelService: {
+        async createChatCompletion() { modelCalls += 1; },
+      },
+    });
+
+    await assert.rejects(
+      service.sendMessage(ID, { message: "Continue" }),
+      (error) => error.code === "CONTEXT_LIMIT_EXCEEDED",
+    );
+    assert.equal(modelCalls, 0);
+    assert.equal(commits, 0);
+  }
+});
+
+test("persistent turns allow the final pair that reaches exactly 200 messages", async () => {
+  const history = Array.from({ length: 198 }, (_, index) => ({
+    sequence: index + 1,
+    role: index % 2 === 0 ? "user" : "assistant",
+    content: `message ${index + 1}`,
+  }));
   let commits = 0;
   const service = createCompanionConversationService({
     conversationStore: {
       getConversation() { return { id: ID }; },
-      getMessages() {
-        return Array.from({ length: 201 }, (_, index) => ({
-          sequence: index + 1,
-          role: index % 2 === 0 ? "user" : "assistant",
-          content: `message ${index + 1}`,
-        }));
+      getMessages() { return history; },
+      commitTurn(_id, userContent, assistantContent) {
+        commits += 1;
+        return {
+          userMessage: { sequence: 199, role: "user", content: userContent },
+          assistantMessage: { sequence: 200, role: "assistant", content: assistantContent },
+        };
       },
-      commitTurn() { commits += 1; },
     },
     modelService: {
-      async createChatCompletion() { modelCalls += 1; },
+      async createChatCompletion() {
+        return { choices: [{ message: { content: "final reply" } }] };
+      },
     },
   });
 
-  await assert.rejects(
-    service.sendMessage(ID, { message: "Continue" }),
-    (error) => error.code === "CONTEXT_LIMIT_EXCEEDED",
-  );
-  assert.equal(modelCalls, 0);
-  assert.equal(commits, 0);
+  const result = await service.sendMessage(ID, { message: "final turn" });
+  assert.equal(commits, 1);
+  assert.equal(result.userMessage.sequence, 199);
+  assert.equal(result.assistantMessage.sequence, 200);
 });
 
 test("turns serialize per conversation so the next turn sees the prior commit", async () => {
