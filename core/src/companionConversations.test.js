@@ -169,6 +169,40 @@ test("persistent turn supplies chronological history and commits the authoritati
   assert.equal(result.assistantMessage.sequence, 4);
 });
 
+test("cross-owner turns fail before model execution or persistence", async () => {
+  const ownerB = "00000000-0000-4000-8000-0000000000bb";
+  let modelCalls = 0;
+  let commits = 0;
+  const service = createCompanionConversationService({
+    conversationStore: {
+      getConversation(ownerId, id) {
+        assert.equal(id, ID);
+        return ownerId === OWNER_ID ? { id: ID } : null;
+      },
+      getMessages() {
+        throw new Error("Cross-owner history must not be read.");
+      },
+      commitTurn() {
+        commits += 1;
+        throw new Error("Cross-owner turn must not persist.");
+      },
+    },
+    modelService: {
+      async createChatCompletion() {
+        modelCalls += 1;
+        return { choices: [{ message: { content: "Should not run." } }] };
+      },
+    },
+  });
+
+  await assert.rejects(
+    service.sendMessage(ownerB, ID, { message: "Read their history" }),
+    (error) => error.code === "CONVERSATION_NOT_FOUND",
+  );
+  assert.equal(modelCalls, 0);
+  assert.equal(commits, 0);
+});
+
 test("model failure leaves persistent conversation history unchanged", async () => {
   let commits = 0;
   const service = createCompanionConversationService({
