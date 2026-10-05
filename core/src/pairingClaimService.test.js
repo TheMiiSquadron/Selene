@@ -20,7 +20,7 @@ async function fixture(t, options = {}) {
       return store.issueCredential({
         homeId: "paired-test-home",
         displayName,
-        capabilities: ["chat"],
+        capabilities: ["chat", "conversation:read", "conversation:write"],
       });
     },
   };
@@ -45,7 +45,7 @@ function assertPairingFailed(operation) {
   );
 }
 
-test("valid claim succeeds once and persists only a chat credential digest", async (t) => {
+test("valid claim succeeds once and persists the standard Home credential digest", async (t) => {
   const f = await fixture(t);
   const { pairingSecret } = f.manager.createSession();
 
@@ -61,7 +61,10 @@ test("valid claim succeeds once and persists only a chat credential digest", asy
 
   const identity = f.store.authenticateCredential(result.credential);
   assert.equal(identity.displayName, "Alex’s iPhone 📱");
-  assert.deepEqual(identity.capabilities, ["chat"]);
+  assert.deepEqual(
+    identity.capabilities,
+    ["chat", "conversation:read", "conversation:write"],
+  );
 
   const database = new DatabaseSync(f.databasePath);
   try {
