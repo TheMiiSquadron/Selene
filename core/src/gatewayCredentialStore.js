@@ -510,6 +510,41 @@ function verifySchema(database) {
   }
 }
 
+function verifyVersion1Schema(database) {
+  const requiredColumns = ["id", "home_id", "display_name", "secret_digest", "created_at", "revoked_at"];
+  const columns = database.prepare("PRAGMA table_info(gateway_credentials)").all().map(({ name }) => name);
+  if (columns.length !== requiredColumns.length || requiredColumns.some((name, index) => columns[index] !== name)) {
+    throw new GatewayCredentialStoreSchemaError(
+      "Gateway credential database schema does not match version 1.",
+      1,
+    );
+  }
+
+  const capabilityColumns = database.prepare("PRAGMA table_info(gateway_credential_capabilities)").all();
+  if (capabilityColumns.length !== 2
+      || capabilityColumns[0]?.name !== "credential_id"
+      || capabilityColumns[1]?.name !== "capability") {
+    throw new GatewayCredentialStoreSchemaError(
+      "Gateway credential database schema does not match version 1.",
+      1,
+    );
+  }
+
+  const requiredIndexes = new Set([
+    "gateway_credentials_created_idx",
+    "gateway_credentials_home_idx",
+  ]);
+  const indexes = database.prepare("PRAGMA index_list(gateway_credentials)").all();
+  for (const name of requiredIndexes) {
+    if (!indexes.some((index) => index.name === name)) {
+      throw new GatewayCredentialStoreSchemaError(
+        "Gateway credential database schema does not match version 1.",
+        1,
+      );
+    }
+  }
+}
+
 function initializeSchema(database, generateOwnerId) {
   const version = readSchemaVersion(database);
 
@@ -523,6 +558,7 @@ function initializeSchema(database, generateOwnerId) {
   }
 
   if (version === 1) {
+    verifyVersion1Schema(database);
     const primaryOwnerId = validateOwnerId(generateOwnerId());
     database.exec("BEGIN IMMEDIATE");
     try {
@@ -535,6 +571,8 @@ function initializeSchema(database, generateOwnerId) {
         ) STRICT;
         INSERT INTO gateway_settings (key, value)
           VALUES ('${PRIMARY_OWNER_SETTING_KEY}', '${primaryOwnerId}');
+        DROP INDEX gateway_credentials_created_idx;
+        DROP INDEX gateway_credentials_home_idx;
         CREATE TABLE gateway_credentials_v2 (
           id TEXT PRIMARY KEY NOT NULL,
           owner_id TEXT NOT NULL CHECK (length(owner_id) = 36),
