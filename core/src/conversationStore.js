@@ -365,6 +365,67 @@ export function createConversationStore({
     });
   }
 
+  function commitTurn(conversationId, userContent, assistantContent) {
+    ensureOpen();
+    const id = validateConversationId(conversationId);
+    const normalizedUserContent = validateMessageContent(userContent);
+    const normalizedAssistantContent = validateMessageContent(assistantContent);
+    const userMessageId = createId();
+    const assistantMessageId = createId();
+    const userTimestamp = createTimestamp();
+    const assistantTimestamp = createTimestamp();
+
+    return runTransaction(() => {
+      if (!selectConversation.get(id)) {
+        throw new ConversationNotFoundError(id);
+      }
+
+      const userSequence = Number(selectNextSequence.get(id).sequence);
+      const assistantSequence = userSequence + 1;
+
+      insertMessageRow.run(
+        userMessageId,
+        id,
+        userSequence,
+        "user",
+        normalizedUserContent,
+        userTimestamp,
+      );
+      insertMessageRow.run(
+        assistantMessageId,
+        id,
+        assistantSequence,
+        "assistant",
+        normalizedAssistantContent,
+        assistantTimestamp,
+      );
+
+      const update = updateConversationTimestamp.run(assistantTimestamp, id);
+      if (Number(update.changes) !== 1) {
+        throw new ConversationNotFoundError(id);
+      }
+
+      return Object.freeze({
+        userMessage: mapMessage({
+          id: userMessageId,
+          conversation_id: id,
+          sequence: userSequence,
+          role: "user",
+          content: normalizedUserContent,
+          created_at: userTimestamp,
+        }),
+        assistantMessage: mapMessage({
+          id: assistantMessageId,
+          conversation_id: id,
+          sequence: assistantSequence,
+          role: "assistant",
+          content: normalizedAssistantContent,
+          created_at: assistantTimestamp,
+        }),
+      });
+    });
+  }
+
   function addUserMessage(conversationId, content) {
     return insertMessage(conversationId, content, "user");
   }
@@ -395,6 +456,7 @@ export function createConversationStore({
     listConversations,
     addUserMessage,
     addAssistantMessage,
+    commitTurn,
     getMessages,
     close,
   });
