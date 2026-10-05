@@ -335,7 +335,7 @@ function sendConversationError(request, response, error) {
     request,
     response,
     500,
-    "CONVERSATION_FAILED",
+    "INTERNAL_ERROR",
     "Conversation request failed.",
   );
 }
@@ -365,21 +365,27 @@ async function handleCreateConversation(request, response, conversationService) 
   }
 }
 
-function handleListConversations(request, response, conversationService) {
+function handleListConversations(request, response, conversationService, searchParams) {
   try {
-    sendNoStoreJson(request, response, 200, conversationService.listConversations());
+    sendNoStoreJson(request, response, 200, conversationService.listConversations({
+      limit: searchParams.get("limit") ?? undefined,
+      cursor: searchParams.get("cursor") ?? undefined,
+    }));
   } catch (error) {
     sendConversationError(request, response, error);
   }
 }
 
-function handleGetConversation(request, response, conversationService, conversationId) {
+function handleGetConversation(request, response, conversationService, conversationId, searchParams) {
   try {
     sendNoStoreJson(
       request,
       response,
       200,
-      conversationService.getConversation(conversationId),
+      conversationService.getConversation(conversationId, {
+        limit: searchParams.get("limit") ?? undefined,
+        cursor: searchParams.get("cursor") ?? undefined,
+      }),
     );
   } catch (error) {
     sendConversationError(request, response, error);
@@ -537,7 +543,7 @@ export function createCompanionServer({
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/conversations") {
-        handleListConversations(request, response, getConversationService());
+        handleListConversations(request, response, getConversationService(), url.searchParams);
         return;
       }
       if (request.method === "GET" && conversationMatch) {
@@ -546,6 +552,7 @@ export function createCompanionServer({
           response,
           getConversationService(),
           decodeURIComponent(conversationMatch[1]),
+          url.searchParams,
         );
         return;
       }
