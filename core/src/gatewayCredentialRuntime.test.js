@@ -159,7 +159,7 @@ test("explicit setup creates a reusable restricted production-style database", a
     issuer.close();
 
     assert.match(issued.bearerCredential, SECRET_PATTERN);
-    assert.deepEqual(issued.credential.capabilities, ["chat"]);
+    assert.deepEqual(issued.credential.capabilities, ["chat", "conversation:read", "conversation:write"]);
 
     const second = setupProductionGatewayCredentialStorage();
     assert.equal(second.databasePath, databasePath);
@@ -169,7 +169,7 @@ test("explicit setup creates a reusable restricted production-style database", a
       const identity = store.authenticateCredential(issued.bearerCredential);
       assert.equal(identity.credentialId, issued.credential.id);
       assert.equal(identity.displayName, "Alex's iPhone");
-      assert.deepEqual(identity.capabilities, ["chat"]);
+      assert.deepEqual(identity.capabilities, ["chat", "conversation:read", "conversation:write"]);
     } finally {
       store.close();
     }
@@ -413,13 +413,13 @@ test("narrow runtime issuer does not expose full store operations or caller-cont
       assert.notEqual(issued.credential.homeId, "caller-selected-home");
       assert.match(issued.credential.homeId, /^paired:[0-9a-f-]{36}$/u);
       assert.equal(issued.credential.displayName, "Alex's iPhone");
-      assert.deepEqual(issued.credential.capabilities, ["chat"]);
+      assert.deepEqual(issued.credential.capabilities, ["chat", "conversation:read", "conversation:write"]);
       assert.notEqual(issued.credential.createdAt, "2001-01-01T00:00:00.000Z");
 
       const store = createGatewayCredentialStore({ databasePath });
       try {
         const identity = store.authenticateCredential(issued.bearerCredential);
-        assert.deepEqual(identity.capabilities, ["chat"]);
+        assert.deepEqual(identity.capabilities, ["chat", "conversation:read", "conversation:write"]);
       } finally {
         store.close();
       }
