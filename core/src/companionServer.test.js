@@ -1281,13 +1281,14 @@ test("Conversation API enforces read and write capabilities before service acces
   const port = await listen(server);
 
   async function authorizedRequest(credential, options = {}) {
+    const { headers: optionHeaders = {}, ...requestOptions } = options;
     return request({
       port,
+      ...requestOptions,
       headers: {
         Authorization: `Bearer ${credential}`,
-        ...(options.headers ?? {}),
+        ...optionHeaders,
       },
-      ...options,
     });
   }
 
