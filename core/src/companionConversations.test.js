@@ -28,10 +28,10 @@ test("conversation creation accepts only an empty client object", () => {
     },
   });
 
-  assert.equal(service.createConversation({}).conversation.title, null);
+  assert.equal(service.createConversation("00000000-0000-4000-8000-0000000000aa", {}).conversation.title, null);
   assert.deepEqual(calls, [[]]);
   assert.throws(
-    () => service.createConversation({ title: "client title" }),
+    () => service.createConversation("00000000-0000-4000-8000-0000000000aa", { title: "client title" }),
     (error) => error instanceof CompanionConversationValidationError
       && error.code === "INVALID_REQUEST",
   );
@@ -52,7 +52,7 @@ test("conversation lists use bounded keyset pagination and opaque cursors", () =
     },
   });
 
-  const first = service.listConversations();
+  const first = service.listConversations("00000000-0000-4000-8000-0000000000aa", );
   assert.equal(COMPANION_CONVERSATION_LIST_DEFAULT_LIMIT, 20);
   assert.equal(COMPANION_CONVERSATION_LIST_MAX_LIMIT, 100);
   assert.equal(first.conversations.length, 20);
@@ -60,7 +60,7 @@ test("conversation lists use bounded keyset pagination and opaque cursors", () =
   assert.equal(typeof first.nextCursor, "string");
   assert.deepEqual(calls[0], { limit: 21, after: null });
 
-  service.listConversations({ limit: 20, cursor: first.nextCursor });
+  service.listConversations("00000000-0000-4000-8000-0000000000aa", { limit: 20, cursor: first.nextCursor });
   assert.deepEqual(calls[1], {
     limit: 21,
     after: {
@@ -70,11 +70,11 @@ test("conversation lists use bounded keyset pagination and opaque cursors", () =
   });
 
   assert.throws(
-    () => service.listConversations({ limit: 101 }),
+    () => service.listConversations("00000000-0000-4000-8000-0000000000aa", { limit: 101 }),
     (error) => error.code === "INVALID_REQUEST",
   );
   assert.throws(
-    () => service.listConversations({ cursor: "not-a-valid-cursor" }),
+    () => service.listConversations("00000000-0000-4000-8000-0000000000aa", { cursor: "not-a-valid-cursor" }),
     (error) => error.code === "INVALID_REQUEST",
   );
 });
@@ -94,14 +94,14 @@ test("conversation retrieval returns complete bounded history and rejects overfl
     },
   });
 
-  const result = service.getConversation(ID);
+  const result = service.getConversation("00000000-0000-4000-8000-0000000000aa", ID);
   assert.equal(COMPANION_CONVERSATION_MESSAGE_MAX_LIMIT, 200);
   assert.equal(result.messages.length, 200);
   assert.equal(result.messages[0].sequence, 1);
   assert.equal(result.messages.at(-1).sequence, 200);
   assert.deepEqual(calls, [{ limit: 201 }]);
   assert.throws(
-    () => service.getConversation(ID, { limit: 20 }),
+    () => service.getConversation("00000000-0000-4000-8000-0000000000aa", ID, { limit: 20 }),
     (error) => error.code === "INVALID_REQUEST",
   );
 
@@ -147,7 +147,7 @@ test("persistent turn supplies chronological history and commits the authoritati
     },
   });
 
-  const result = await service.sendMessage(ID, { message: "What was my test word?" });
+  const result = await service.sendMessage("00000000-0000-4000-8000-0000000000aa", ID, { message: "What was my test word?" });
 
   assert.equal(modelCalls.length, 1);
   assert.equal(modelCalls[0].role, "primary");
@@ -181,7 +181,7 @@ test("model failure leaves persistent conversation history unchanged", async () 
   });
 
   await assert.rejects(
-    service.sendMessage(ID, { message: "Hello" }),
+    service.sendMessage("00000000-0000-4000-8000-0000000000aa", ID, { message: "Hello" }),
     (error) => error.code === "MODEL_UNAVAILABLE"
       && !String(error.message).includes("private model failure"),
   );
@@ -210,7 +210,7 @@ test("persistent turns reject a new pair when it would exceed the 200-message ce
     });
 
     await assert.rejects(
-      service.sendMessage(ID, { message: "Continue" }),
+      service.sendMessage("00000000-0000-4000-8000-0000000000aa", ID, { message: "Continue" }),
       (error) => error.code === "CONTEXT_LIMIT_EXCEEDED",
     );
     assert.equal(modelCalls, 0);
@@ -244,7 +244,7 @@ test("persistent turns allow the final pair that reaches exactly 200 messages", 
     },
   });
 
-  const result = await service.sendMessage(ID, { message: "final turn" });
+  const result = await service.sendMessage("00000000-0000-4000-8000-0000000000aa", ID, { message: "final turn" });
   assert.equal(commits, 1);
   assert.equal(result.userMessage.sequence, 199);
   assert.equal(result.assistantMessage.sequence, 200);
@@ -278,9 +278,9 @@ test("turns serialize per conversation so the next turn sees the prior commit", 
     },
   });
 
-  const first = service.sendMessage(ID, { message: "first" });
+  const first = service.sendMessage("00000000-0000-4000-8000-0000000000aa", ID, { message: "first" });
   await new Promise((resolve) => setImmediate(resolve));
-  const second = service.sendMessage(ID, { message: "second" });
+  const second = service.sendMessage("00000000-0000-4000-8000-0000000000aa", ID, { message: "second" });
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(modelCall, 1);
