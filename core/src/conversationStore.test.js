@@ -152,7 +152,7 @@ test("conversations have generated UUIDs and stable UTC timestamps", async () =>
   const store = createConversationStore({ primaryOwnerId: PRIMARY_OWNER_ID, databasePath, now: () => instant });
 
   try {
-    const created = store.createConversation({ title: " First conversation " });
+    const created = store.createConversation(PRIMARY_OWNER_ID, { title: " First conversation " });
 
     assert.match(created.id, UUID_PATTERN);
     assert.deepEqual(created, {
@@ -161,8 +161,8 @@ test("conversations have generated UUIDs and stable UTC timestamps", async () =>
       createdAt: instant.toISOString(),
       updatedAt: instant.toISOString(),
     });
-    assert.deepEqual(store.getConversation(created.id), created);
-    assert.deepEqual(store.listConversations({ limit: 20 }), [created]);
+    assert.deepEqual(store.getConversation(PRIMARY_OWNER_ID, created.id), created);
+    assert.deepEqual(store.listConversations(PRIMARY_OWNER_ID, { limit: 20 }), [created]);
   } finally {
     store.close();
   }
@@ -187,12 +187,12 @@ test("conversation listing is deterministic by update time and ID", async () => 
   });
 
   try {
-    const first = store.createConversation({ title: "First" });
-    const second = store.createConversation({ title: "Second" });
-    store.addUserMessage(first.id, "Updated later");
+    const first = store.createConversation(PRIMARY_OWNER_ID, { title: "First" });
+    const second = store.createConversation(PRIMARY_OWNER_ID, { title: "Second" });
+    store.addUserMessage(PRIMARY_OWNER_ID, first.id, "Updated later");
 
     assert.deepEqual(
-      store.listConversations({ limit: 20 }).map(({ id }) => id),
+      store.listConversations(PRIMARY_OWNER_ID, { limit: 20 }).map(({ id }) => id),
       [first.id, second.id],
     );
   } finally {
@@ -206,10 +206,10 @@ test("messages use authoritative sequence order even with identical timestamps",
   const store = createConversationStore({ primaryOwnerId: PRIMARY_OWNER_ID, databasePath, now: () => instant });
 
   try {
-    const conversation = store.createConversation();
-    const user = store.addUserMessage(conversation.id, "Hello");
-    const assistant = store.addAssistantMessage(conversation.id, "Hi there");
-    const messages = store.getMessages(conversation.id);
+    const conversation = store.createConversation(PRIMARY_OWNER_ID);
+    const user = store.addUserMessage(PRIMARY_OWNER_ID, conversation.id, "Hello");
+    const assistant = store.addAssistantMessage(PRIMARY_OWNER_ID, conversation.id, "Hi there");
+    const messages = store.getMessages(PRIMARY_OWNER_ID, conversation.id);
 
     assert.deepEqual(messages, [user, assistant]);
     assert.deepEqual(messages.map(({ sequence }) => sequence), [1, 2]);
@@ -225,7 +225,7 @@ test("messages use authoritative sequence order even with identical timestamps",
 test("schema enforces foreign keys and per-conversation sequence uniqueness", async () => {
   const databasePath = await createTempDatabasePath();
   const store = createConversationStore({ primaryOwnerId: PRIMARY_OWNER_ID, databasePath });
-  const conversation = store.createConversation();
+  const conversation = store.createConversation(PRIMARY_OWNER_ID);
   store.close();
 
   const database = new DatabaseSync(databasePath);
@@ -272,12 +272,12 @@ test("message insertion and conversation timestamp update commit atomically", as
   });
 
   try {
-    const conversation = store.createConversation();
-    const message = store.addUserMessage(conversation.id, "Persist this");
+    const conversation = store.createConversation(PRIMARY_OWNER_ID);
+    const message = store.addUserMessage(PRIMARY_OWNER_ID, conversation.id, "Persist this");
 
     assert.equal(message.createdAt, messageAt.toISOString());
-    assert.equal(store.getConversation(conversation.id).updatedAt, messageAt.toISOString());
-    assert.deepEqual(store.getMessages(conversation.id), [message]);
+    assert.equal(store.getConversation(PRIMARY_OWNER_ID, conversation.id).updatedAt, messageAt.toISOString());
+    assert.deepEqual(store.getMessages(PRIMARY_OWNER_ID, conversation.id), [message]);
   } finally {
     store.close();
   }
@@ -286,7 +286,7 @@ test("message insertion and conversation timestamp update commit atomically", as
 test("an unsuccessful message transaction rolls back the inserted message", async () => {
   const databasePath = await createTempDatabasePath();
   let store = createConversationStore({ primaryOwnerId: PRIMARY_OWNER_ID, databasePath });
-  const conversation = store.createConversation();
+  const conversation = store.createConversation(PRIMARY_OWNER_ID);
   store.close();
 
   const database = new DatabaseSync(databasePath);
@@ -301,14 +301,14 @@ test("an unsuccessful message transaction rolls back the inserted message", asyn
 
   store = createConversationStore({ primaryOwnerId: PRIMARY_OWNER_ID, databasePath });
   try {
-    const before = store.getConversation(conversation.id);
+    const before = store.getConversation(PRIMARY_OWNER_ID, conversation.id);
 
     assert.throws(
-      () => store.addUserMessage(conversation.id, "Must roll back"),
+      () => store.addUserMessage(PRIMARY_OWNER_ID, conversation.id, "Must roll back"),
       /forced timestamp failure/,
     );
-    assert.deepEqual(store.getMessages(conversation.id), []);
-    assert.deepEqual(store.getConversation(conversation.id), before);
+    assert.deepEqual(store.getMessages(PRIMARY_OWNER_ID, conversation.id), []);
+    assert.deepEqual(store.getConversation(PRIMARY_OWNER_ID, conversation.id), before);
   } finally {
     store.close();
   }
@@ -317,14 +317,14 @@ test("an unsuccessful message transaction rolls back the inserted message", asyn
 test("conversations and messages persist after closing and reopening", async () => {
   const databasePath = await createTempDatabasePath();
   let store = createConversationStore({ primaryOwnerId: PRIMARY_OWNER_ID, databasePath });
-  const conversation = store.createConversation({ title: "Persistent" });
-  const message = store.addUserMessage(conversation.id, "Still here");
+  const conversation = store.createConversation(PRIMARY_OWNER_ID, { title: "Persistent" });
+  const message = store.addUserMessage(PRIMARY_OWNER_ID, conversation.id, "Still here");
   store.close();
 
   store = createConversationStore({ primaryOwnerId: PRIMARY_OWNER_ID, databasePath });
   try {
-    assert.equal(store.getConversation(conversation.id).title, "Persistent");
-    assert.deepEqual(store.getMessages(conversation.id), [message]);
+    assert.equal(store.getConversation(PRIMARY_OWNER_ID, conversation.id).title, "Persistent");
+    assert.deepEqual(store.getMessages(PRIMARY_OWNER_ID, conversation.id), [message]);
   } finally {
     store.close();
   }
@@ -336,19 +336,19 @@ test("invalid inputs and unknown conversations fail explicitly", async () => {
   const unknownId = randomUUID();
 
   try {
-    assert.throws(() => store.createConversation({ title: "   " }), ConversationStoreValidationError);
-    assert.throws(() => store.getConversation("not-a-uuid"), ConversationStoreValidationError);
-    assert.equal(store.getConversation(unknownId), null);
+    assert.throws(() => store.createConversation(PRIMARY_OWNER_ID, { title: "   " }), ConversationStoreValidationError);
+    assert.throws(() => store.getConversation(PRIMARY_OWNER_ID, "not-a-uuid"), ConversationStoreValidationError);
+    assert.equal(store.getConversation(PRIMARY_OWNER_ID, unknownId), null);
     assert.throws(
-      () => store.addUserMessage(unknownId, "Hello"),
+      () => store.addUserMessage(PRIMARY_OWNER_ID, unknownId, "Hello"),
       ConversationNotFoundError,
     );
     assert.throws(
-      () => store.getMessages(unknownId),
+      () => store.getMessages(PRIMARY_OWNER_ID, unknownId),
       ConversationNotFoundError,
     );
     assert.throws(
-      () => store.addAssistantMessage(unknownId, "   "),
+      () => store.addAssistantMessage(PRIMARY_OWNER_ID, unknownId, "   "),
       ConversationStoreValidationError,
     );
   } finally {
@@ -410,8 +410,8 @@ test("close is idempotent and prevents further operations", async () => {
   store.close();
   store.close();
 
-  assert.throws(() => store.listConversations(), ConversationStoreClosedError);
-  assert.throws(() => store.createConversation(), ConversationStoreClosedError);
+  assert.throws(() => store.listConversations(PRIMARY_OWNER_ID, ), ConversationStoreClosedError);
+  assert.throws(() => store.createConversation(PRIMARY_OWNER_ID), ConversationStoreClosedError);
 });
 
 
@@ -425,8 +425,8 @@ test("completed turns persist user and assistant messages atomically with consec
   const store = createConversationStore({ primaryOwnerId: PRIMARY_OWNER_ID, databasePath, now: sequence(times) });
 
   try {
-    const conversation = store.createConversation();
-    const turn = store.commitTurn(conversation.id, "Hello", "Hi there");
+    const conversation = store.createConversation(PRIMARY_OWNER_ID);
+    const turn = store.commitTurn(PRIMARY_OWNER_ID, conversation.id, "Hello", "Hi there");
 
     assert.deepEqual(
       [turn.userMessage.sequence, turn.assistantMessage.sequence],
@@ -436,12 +436,12 @@ test("completed turns persist user and assistant messages atomically with consec
       [turn.userMessage.role, turn.assistantMessage.role],
       ["user", "assistant"],
     );
-    assert.deepEqual(store.getMessages(conversation.id), [
+    assert.deepEqual(store.getMessages(PRIMARY_OWNER_ID, conversation.id), [
       turn.userMessage,
       turn.assistantMessage,
     ]);
     assert.equal(
-      store.getConversation(conversation.id).updatedAt,
+      store.getConversation(PRIMARY_OWNER_ID, conversation.id).updatedAt,
       turn.assistantMessage.createdAt,
     );
   } finally {
@@ -452,7 +452,7 @@ test("completed turns persist user and assistant messages atomically with consec
 test("failed completed-turn persistence rolls back both messages", async () => {
   const databasePath = await createTempDatabasePath();
   let store = createConversationStore({ primaryOwnerId: PRIMARY_OWNER_ID, databasePath });
-  const conversation = store.createConversation();
+  const conversation = store.createConversation(PRIMARY_OWNER_ID);
   store.close();
 
   const database = new DatabaseSync(databasePath);
@@ -468,13 +468,13 @@ test("failed completed-turn persistence rolls back both messages", async () => {
 
   store = createConversationStore({ primaryOwnerId: PRIMARY_OWNER_ID, databasePath });
   try {
-    const before = store.getConversation(conversation.id);
+    const before = store.getConversation(PRIMARY_OWNER_ID, conversation.id);
     assert.throws(
-      () => store.commitTurn(conversation.id, "Do not orphan me", "Failure"),
+      () => store.commitTurn(PRIMARY_OWNER_ID, conversation.id, "Do not orphan me", "Failure"),
       /forced assistant failure/,
     );
-    assert.deepEqual(store.getMessages(conversation.id), []);
-    assert.deepEqual(store.getConversation(conversation.id), before);
+    assert.deepEqual(store.getMessages(PRIMARY_OWNER_ID, conversation.id), []);
+    assert.deepEqual(store.getConversation(PRIMARY_OWNER_ID, conversation.id), before);
   } finally {
     store.close();
   }
@@ -491,14 +491,14 @@ test("conversation listing performs bounded deterministic keyset reads", async (
   const store = createConversationStore({ primaryOwnerId: PRIMARY_OWNER_ID, databasePath, now: sequence(times) });
 
   try {
-    const firstCreated = store.createConversation();
-    const secondCreated = store.createConversation();
-    const thirdCreated = store.createConversation();
+    const firstCreated = store.createConversation(PRIMARY_OWNER_ID);
+    const secondCreated = store.createConversation(PRIMARY_OWNER_ID);
+    const thirdCreated = store.createConversation(PRIMARY_OWNER_ID);
 
-    const firstPage = store.listConversations({ limit: 2 });
+    const firstPage = store.listConversations(PRIMARY_OWNER_ID, { limit: 2 });
     assert.deepEqual(firstPage.map(({ id }) => id), [thirdCreated.id, secondCreated.id]);
 
-    const secondPage = store.listConversations({
+    const secondPage = store.listConversations(PRIMARY_OWNER_ID, {
       limit: 2,
       after: {
         updatedAt: firstPage.at(-1).updatedAt,
@@ -516,12 +516,12 @@ test("message retrieval applies its bound inside the store", async () => {
   const store = createConversationStore({ primaryOwnerId: PRIMARY_OWNER_ID, databasePath });
 
   try {
-    const conversation = store.createConversation();
-    store.addUserMessage(conversation.id, "one");
-    store.addAssistantMessage(conversation.id, "two");
-    store.addUserMessage(conversation.id, "three");
+    const conversation = store.createConversation(PRIMARY_OWNER_ID);
+    store.addUserMessage(PRIMARY_OWNER_ID, conversation.id, "one");
+    store.addAssistantMessage(PRIMARY_OWNER_ID, conversation.id, "two");
+    store.addUserMessage(PRIMARY_OWNER_ID, conversation.id, "three");
 
-    const messages = store.getMessages(conversation.id, { limit: 2 });
+    const messages = store.getMessages(PRIMARY_OWNER_ID, conversation.id, { limit: 2 });
     assert.deepEqual(messages.map(({ sequence }) => sequence), [1, 2]);
   } finally {
     store.close();
