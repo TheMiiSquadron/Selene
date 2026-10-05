@@ -1172,6 +1172,81 @@ test("Conversation API creates, lists, and retrieves through the Gateway boundar
   }
 });
 
+test("Conversation Gateway propagates distinct authenticated owners without client authority", async () => {
+  const ownerA = TEST_OWNER_ID;
+  const ownerB = "00000000-0000-4000-8000-0000000000bb";
+  const calls = [];
+  const conversationService = {
+    createConversation(ownerId, payload) {
+      calls.push(["create", ownerId, payload]);
+      return { ok: true, conversation: { id: "00000000-0000-4000-8000-000000000001" } };
+    },
+    getConversation(ownerId, id) {
+      calls.push(["get", ownerId, id]);
+      throw new CompanionConversationValidationError(
+        "CONVERSATION_NOT_FOUND",
+        "Conversation not found.",
+      );
+    },
+  };
+  const credentialStore = {
+    authenticateCredential(value) {
+      const ownerId = value === "home-a2" ? ownerA
+        : value === "home-b" ? ownerB
+          : value === "home-a1" ? ownerA : null;
+      if (!ownerId) throw new Error("Invalid credential.");
+      return {
+        ownerId,
+        capabilities: ["chat", "conversation:read", "conversation:write"],
+      };
+    },
+  };
+  const server = createCompanionServer({ conversationService, credentialStore });
+  const port = await listen(server);
+  const id = "00000000-0000-4000-8000-000000000001";
+
+  try {
+    for (const credential of ["home-a1", "home-a2"]) {
+      const response = await request({
+        port,
+        method: "POST",
+        path: "/api/conversations",
+        headers: {
+          Authorization: `Bearer ${credential}`,
+          "Content-Type": "application/json",
+        },
+        body: {},
+      });
+      assert.equal(response.statusCode, 201);
+    }
+
+    const crossOwner = await request({
+      port,
+      path: `/api/conversations/${id}`,
+      headers: { Authorization: "Bearer home-b" },
+    });
+    const nonexistent = await request({
+      port,
+      path: "/api/conversations/00000000-0000-4000-8000-000000000099",
+      headers: { Authorization: "Bearer home-b" },
+    });
+    assert.equal(crossOwner.statusCode, 404);
+    assert.equal(nonexistent.statusCode, 404);
+    assert.deepEqual(JSON.parse(crossOwner.body), JSON.parse(nonexistent.body));
+
+    assert.deepEqual(calls.slice(0, 2), [
+      ["create", ownerA, {}],
+      ["create", ownerA, {}],
+    ]);
+    assert.deepEqual(calls.slice(2), [
+      ["get", ownerB, id],
+      ["get", ownerB, "00000000-0000-4000-8000-000000000099"],
+    ]);
+  } finally {
+    await close(server);
+  }
+});
+
 test("Conversation API requires HTTPS and authentication", async () => {
   const conversationService = {
     listConversations() {
