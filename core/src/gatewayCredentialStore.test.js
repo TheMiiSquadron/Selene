@@ -192,6 +192,41 @@ test("schema v1 migrates existing credentials to one stable primary owner", asyn
   }
 });
 
+test("credentials default to the primary owner while trusted issuance can bind another owner", async () => {
+  const databasePath = await createTempDatabasePath();
+  const primaryOwnerId = "00000000-0000-4000-8000-000000000101";
+  const otherOwnerId = "00000000-0000-4000-8000-000000000202";
+  const store = createGatewayCredentialStore({
+    databasePath,
+    generateOwnerId: () => primaryOwnerId,
+  });
+
+  try {
+    const windows = issueWindowsHome(store);
+    const iphone = store.issueCredential({
+      homeId: "iphone-home",
+      displayName: "iPhone Home",
+      capabilities: ALL_CAPABILITIES,
+    });
+    const friend = store.issueCredential({
+      ownerId: otherOwnerId,
+      homeId: "friend-home",
+      displayName: "Friend Home",
+      capabilities: ALL_CAPABILITIES,
+    });
+
+    assert.equal(windows.credential.ownerId, primaryOwnerId);
+    assert.equal(iphone.credential.ownerId, primaryOwnerId);
+    assert.equal(friend.credential.ownerId, otherOwnerId);
+    assert.equal(
+      store.authenticateCredential(friend.bearerCredential).ownerId,
+      otherOwnerId,
+    );
+  } finally {
+    store.close();
+  }
+});
+
 test("database persists only fixed-size digests and public results never disclose secrets", async () => {
   const databasePath = await createTempDatabasePath();
   const secret = Buffer.alloc(32, 0x5a);
