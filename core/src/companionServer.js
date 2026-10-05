@@ -514,7 +514,9 @@ export function createCompanionServer({
 
   function getConversationService() {
     if (resolvedConversationService) return resolvedConversationService;
-    const store = conversationStore ?? (ownedConversationStore = createConversationStore());
+    const store = conversationStore ?? (ownedConversationStore = createConversationStore({
+      primaryOwnerId: credentialStore?.getPrimaryOwnerId?.(),
+    }));
     resolvedConversationService = createCompanionConversationService({
       conversationStore: store,
     });
