@@ -324,19 +324,21 @@ export function createConversationStore({
   const selectConversation = database.prepare(`
     SELECT id, owner_id, title, created_at, updated_at
     FROM conversations
-    WHERE id = ?
+    WHERE id = ? AND owner_id = ?
   `);
   const listConversationRows = database.prepare(`
     SELECT id, owner_id, title, created_at, updated_at
     FROM conversations
+    WHERE owner_id = ?
     ORDER BY updated_at DESC, id DESC
     LIMIT ?
   `);
   const listConversationRowsAfter = database.prepare(`
     SELECT id, owner_id, title, created_at, updated_at
     FROM conversations
-    WHERE updated_at < ?
-       OR (updated_at = ? AND id < ?)
+    WHERE owner_id = ?
+      AND (updated_at < ?
+       OR (updated_at = ? AND id < ?))
     ORDER BY updated_at DESC, id DESC
     LIMIT ?
   `);
@@ -348,6 +350,11 @@ export function createConversationStore({
     SELECT id, conversation_id, sequence, role, content, created_at
     FROM messages
     WHERE conversation_id = ?
+      AND EXISTS (
+        SELECT 1 FROM conversations
+        WHERE conversations.id = messages.conversation_id
+          AND conversations.owner_id = ?
+      )
     ORDER BY sequence ASC
     LIMIT ?
   `);
@@ -369,7 +376,7 @@ export function createConversationStore({
   const updateConversationTimestamp = database.prepare(`
     UPDATE conversations
     SET updated_at = ?
-    WHERE id = ?
+    WHERE id = ? AND owner_id = ?
   `);
 
   function ensureOpen() {
@@ -404,29 +411,32 @@ export function createConversationStore({
     }
   }
 
-  function createConversation({ title = null } = {}) {
+  function createConversation(ownerId, { title = null } = {}) {
+    const owner = validateOwnerId(ownerId);
     ensureOpen();
     const id = createId();
     const timestamp = createTimestamp();
     const normalizedTitle = validateTitle(title);
 
-    insertConversation.run(id, normalizedPrimaryOwnerId, normalizedTitle, timestamp, timestamp);
-    return mapConversation(selectConversation.get(id));
+    insertConversation.run(id, owner, normalizedTitle, timestamp, timestamp);
+    return mapConversation(selectConversation.get(id, owner));
   }
 
-  function getConversation(conversationId) {
+  function getConversation(ownerId, conversationId) {
     ensureOpen();
+    const owner = validateOwnerId(ownerId);
     const id = validateConversationId(conversationId);
-    return mapConversation(selectConversation.get(id));
+    return mapConversation(selectConversation.get(id, owner));
   }
 
-  function listConversations({ limit, after = null } = {}) {
+  function listConversations(ownerId, { limit, after = null } = {}) {
     ensureOpen();
+    const owner = validateOwnerId(ownerId);
     if (!Number.isSafeInteger(limit) || limit < 1) {
       throw new ConversationStoreValidationError("Conversation list limit must be a positive integer.");
     }
     if (after === null) {
-      return listConversationRows.all(limit).map(mapConversation);
+      return listConversationRows.all(owner, limit).map(mapConversation);
     }
     if (
       !after
@@ -438,19 +448,20 @@ export function createConversationStore({
     }
     const id = validateConversationId(after.id);
     return listConversationRowsAfter
-      .all(after.updatedAt, after.updatedAt, id, limit)
+      .all(owner, after.updatedAt, after.updatedAt, id, limit)
       .map(mapConversation);
   }
 
-  function insertMessage(conversationId, content, role) {
+  function insertMessage(ownerId, conversationId, content, role) {
     ensureOpen();
+    const owner = validateOwnerId(ownerId);
     const id = validateConversationId(conversationId);
     const normalizedContent = validateMessageContent(content);
     const messageId = createId();
     const timestamp = createTimestamp();
 
     return runTransaction(() => {
-      if (!selectConversation.get(id)) {
+      if (!selectConversation.get(id, owner)) {
         throw new ConversationNotFoundError(id);
       }
 
@@ -464,7 +475,7 @@ export function createConversationStore({
         timestamp,
       );
 
-      const update = updateConversationTimestamp.run(timestamp, id);
+      const update = updateConversationTimestamp.run(timestamp, id, owner);
       if (Number(update.changes) !== 1) {
         throw new ConversationNotFoundError(id);
       }
@@ -480,8 +491,9 @@ export function createConversationStore({
     });
   }
 
-  function commitTurn(conversationId, userContent, assistantContent) {
+  function commitTurn(ownerId, conversationId, userContent, assistantContent) {
     ensureOpen();
+    const owner = validateOwnerId(ownerId);
     const id = validateConversationId(conversationId);
     const normalizedUserContent = validateMessageContent(userContent);
     const normalizedAssistantContent = validateMessageContent(assistantContent);
@@ -491,7 +503,7 @@ export function createConversationStore({
     const assistantTimestamp = createTimestamp();
 
     return runTransaction(() => {
-      if (!selectConversation.get(id)) {
+      if (!selectConversation.get(id, owner)) {
         throw new ConversationNotFoundError(id);
       }
 
@@ -515,7 +527,7 @@ export function createConversationStore({
         assistantTimestamp,
       );
 
-      const update = updateConversationTimestamp.run(assistantTimestamp, id);
+      const update = updateConversationTimestamp.run(assistantTimestamp, id, owner);
       if (Number(update.changes) !== 1) {
         throw new ConversationNotFoundError(id);
       }
@@ -541,24 +553,25 @@ export function createConversationStore({
     });
   }
 
-  function addUserMessage(conversationId, content) {
-    return insertMessage(conversationId, content, "user");
+  function addUserMessage(ownerId, conversationId, content) {
+    return insertMessage(ownerId, conversationId, content, "user");
   }
 
-  function addAssistantMessage(conversationId, content) {
-    return insertMessage(conversationId, content, "assistant");
+  function addAssistantMessage(ownerId, conversationId, content) {
+    return insertMessage(ownerId, conversationId, content, "assistant");
   }
 
-  function getMessages(conversationId, { limit = 201 } = {}) {
+  function getMessages(ownerId, conversationId, { limit = 201 } = {}) {
     ensureOpen();
+    const owner = validateOwnerId(ownerId);
     const id = validateConversationId(conversationId);
     if (!Number.isSafeInteger(limit) || limit < 1) {
       throw new ConversationStoreValidationError("Message limit must be a positive integer.");
     }
-    if (!selectConversation.get(id)) {
+    if (!selectConversation.get(id, owner)) {
       throw new ConversationNotFoundError(id);
     }
-    return selectMessages.all(id, limit).map(mapMessage);
+    return selectMessages.all(id, owner, limit).map(mapMessage);
   }
 
   function close() {
