@@ -2,7 +2,8 @@
 // Run only against your own Selene Host. Does not disable TLS verification.
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { resolve, relative, isAbsolute } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const [phase, stateFile] = process.argv.slice(2);
 const base = process.env.SELENE_M46_URL;
@@ -17,8 +18,9 @@ if (url.protocol !== "https:" || url.username || url.password || url.search || u
   throw new Error("SELENE_M46_URL must be an HTTPS base URL without credentials or query.");
 }
 const statePath = resolve(stateFile);
-const root = resolve(new URL("../..", import.meta.url).pathname);
-if (statePath.startsWith(root + "/") || statePath === root) {
+const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
+const relativeState = relative(root, statePath);
+if (relativeState === "" || (relativeState !== ".." && !relativeState.startsWith(`..${process.platform === "win32" ? "\\\\" : "/"}`) && !isAbsolute(relativeState))) {
   throw new Error("State file must be outside the repository.");
 }
 const origin = url.href.replace(/\/$/, "");
@@ -30,7 +32,7 @@ async function request(method, path, body, bearer = token) {
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    signal: AbortSignal.timeout(45000),
+    signal: AbortSignal.timeout(120000),
   });
   const payload = await response.json();
   return { status: response.status, payload, headers: response.headers };
