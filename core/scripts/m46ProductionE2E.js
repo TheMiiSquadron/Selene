@@ -2,7 +2,7 @@
 // Run only against your own Selene Host. Does not disable TLS verification.
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
-import { resolve, relative, isAbsolute } from "node:path";
+import { resolve, relative, isAbsolute, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const [phase, stateFile] = process.argv.slice(2);
@@ -20,7 +20,7 @@ if (url.protocol !== "https:" || url.username || url.password || url.search || u
 const statePath = resolve(stateFile);
 const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const relativeState = relative(root, statePath);
-if (relativeState === "" || (relativeState !== ".." && !relativeState.startsWith(`..${process.platform === "win32" ? "\\\\" : "/"}`) && !isAbsolute(relativeState))) {
+if (relativeState === "" || (relativeState !== ".." && !relativeState.startsWith(`..${sep}`) && !isAbsolute(relativeState))) {
   throw new Error("State file must be outside the repository.");
 }
 const origin = url.href.replace(/\/$/, "");
