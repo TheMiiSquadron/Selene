@@ -15,6 +15,7 @@
     projects: 'Projects are not connected in this visual milestone.',
     devices: 'Device information is unavailable until Selene Core is connected.',
     settings: 'Settings will open in a future Windows Home milestone.',
+    history: 'Conversation history will be available after conversation integration is connected.',
     attachments: 'Attachments are not available until conversation integration is connected.',
     mode: 'Conversation modes are not available in this preview.',
     voice: 'Voice input is not available until conversation integration is connected.',

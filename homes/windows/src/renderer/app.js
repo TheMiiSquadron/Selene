@@ -10,12 +10,16 @@ const composerStatus = document.querySelector('#composer-status');
 const sendButton = document.querySelector('#send-button');
 const homeView = document.querySelector('#home-view');
 const settingsView = document.querySelector('#settings-view');
+const homeButton = document.querySelector('[data-action="home"]');
 const newChatButton = document.querySelector('[data-action="new-chat"]');
 const settingsButton = document.querySelector('[data-action="settings"]');
 const settingsStatus = document.querySelector('#settings-status');
 const themeChoices = Array.from(document.querySelectorAll('[data-theme-choice]'));
 
 let currentTheme = 'obsidian';
+
+const COMPOSER_SINGLE_LINE_HEIGHT = 40;
+const COMPOSER_MAX_EXPANDED_INPUT_HEIGHT = 112;
 
 function applySidebarState(collapsed) {
   sidebar.dataset.collapsed = String(collapsed);
@@ -56,25 +60,35 @@ function applyTheme(theme) {
   });
 }
 
-function showView(view) {
+function setCurrentNavigation(control) {
+  [homeButton, newChatButton, settingsButton].forEach((button) => {
+    const current = button === control;
+    button.classList.toggle('is-current', current);
+    if (current) {
+      button.setAttribute('aria-current', 'page');
+    } else {
+      button.removeAttribute('aria-current');
+    }
+  });
+}
+
+function showView(view, activeNavigation = homeButton) {
   const showSettings = view === 'settings';
   homeView.hidden = showSettings;
   settingsView.hidden = !showSettings;
-
-  newChatButton.classList.toggle('is-current', !showSettings);
-  settingsButton.classList.toggle('is-current', showSettings);
-  if (showSettings) {
-    newChatButton.removeAttribute('aria-current');
-    settingsButton.setAttribute('aria-current', 'page');
-  } else {
-    newChatButton.setAttribute('aria-current', 'page');
-    settingsButton.removeAttribute('aria-current');
-  }
+  setCurrentNavigation(showSettings ? settingsButton : activeNavigation);
 }
 
 function resizeComposer() {
+  composer.classList.remove('is-expanded');
   composerInput.style.height = 'auto';
-  composerInput.style.height = `${Math.min(composerInput.scrollHeight, 160)}px`;
+  const isExpanded = composerInput.scrollHeight > COMPOSER_SINGLE_LINE_HEIGHT;
+  composer.classList.toggle('is-expanded', isExpanded);
+  composerInput.style.height = 'auto';
+  const maximumHeight = isExpanded
+    ? COMPOSER_MAX_EXPANDED_INPUT_HEIGHT
+    : COMPOSER_SINGLE_LINE_HEIGHT;
+  composerInput.style.height = `${Math.min(composerInput.scrollHeight, maximumHeight)}px`;
 }
 
 function syncComposerState() {
@@ -99,8 +113,12 @@ sidebarToggle.addEventListener('click', async () => {
   }
 });
 
+homeButton.addEventListener('click', () => {
+  showView('home', homeButton);
+});
+
 newChatButton.addEventListener('click', () => {
-  showView('home');
+  showView('home', newChatButton);
   composerInput.focus();
 });
 
