@@ -5,8 +5,8 @@
   "main": "src/main.cjs",
   "scripts": {
     "start": "electron .",
-    "test": "node --test src/windowState.test.cjs",
-    "check": "node --check src/main.cjs && node --check src/windowState.cjs && node --test src/windowState.test.cjs"
+    "test": "node --test src/windowState.test.cjs src/uiPreferences.test.cjs src/renderer/viewState.test.cjs",
+    "check": "node --check src/main.cjs && node --check src/preload.cjs && node --check src/renderer/app.js && node --check src/renderer/viewState.js && node --check src/uiPreferences.cjs && node --check src/windowState.cjs && npm test"
   },
   "keywords": [],
   "author": "",

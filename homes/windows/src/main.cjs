@@ -1,5 +1,5 @@
 
-const { app, BrowserWindow, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('node:path');
 const {
   WINDOW_STATE_FILENAME,
@@ -8,6 +8,10 @@ const {
   recoverWindowBounds,
   saveWindowState
 } = require('./windowState.cjs');
+const {
+  UI_PREFERENCES_FILENAME,
+  createUiPreferencesStore
+} = require('./uiPreferences.cjs');
 
 const DEFAULT_WINDOW_BOUNDS = Object.freeze({
   width: 1200,
@@ -15,6 +19,19 @@ const DEFAULT_WINDOW_BOUNDS = Object.freeze({
 });
 
 const WINDOW_STATE_SAVE_DELAY_MS = 250;
+
+const SIDEBAR_GET_CHANNEL = 'selene:preferences:get-sidebar-collapsed';
+const SIDEBAR_SET_CHANNEL = 'selene:preferences:set-sidebar-collapsed';
+
+function registerUiPreferenceHandlers() {
+  const preferencePath = path.join(app.getPath('userData'), UI_PREFERENCES_FILENAME);
+  const preferenceStore = createUiPreferencesStore(preferencePath);
+
+  ipcMain.handle(SIDEBAR_GET_CHANNEL, () => preferenceStore.getSidebarCollapsed());
+  ipcMain.handle(SIDEBAR_SET_CHANNEL, (_event, collapsed) => (
+    preferenceStore.setSidebarCollapsed(collapsed)
+  ));
+}
 
 function persistWindowState(win, statePath) {
   if (win.isDestroyed()) {
@@ -69,15 +86,16 @@ function createWindow() {
     minWidth: 800,
     minHeight: 550,
     show: false,
-    backgroundColor: '#14141a',
+    backgroundColor: '#0e0d13',
     title: 'Selene',
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#14141a',
+      color: '#0e0d13',
       symbolColor: '#e8e5f0',
       height: 40
     },
     webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true
@@ -97,6 +115,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  registerUiPreferenceHandlers();
   createWindow();
 
   app.on('activate', () => {

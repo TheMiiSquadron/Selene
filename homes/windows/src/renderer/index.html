@@ -1,70 +1,157 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'">
   <title>Selene</title>
-  <style>
-    :root {
-      color-scheme: dark;
-      font-family: "Segoe UI", sans-serif;
-      background: #14141a;
-      color: #e8e5f0;
-    }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background: #14141a;
-    }
-
-    .titlebar {
-      height: 40px;
-      display: flex;
-      align-items: center;
-      padding: 0 150px 0 18px;
-      -webkit-app-region: drag;
-      app-region: drag;
-    }
-
-    .titlebar span {
-      font-size: 13px;
-      font-weight: 600;
-    }
-
-    main {
-      min-height: calc(100vh - 40px);
-      display: grid;
-      place-items: center;
-    }
-
-    .welcome {
-      text-align: center;
-    }
-
-    .welcome h1 {
-      font-size: 32px;
-      font-weight: 500;
-      margin-bottom: 8px;
-    }
-
-    .welcome p {
-      color: #aaa6b8;
-      font-size: 14px;
-    }
-  </style>
+  <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <header class="titlebar">
-    <span>Selene</span>
-  </header>
+  <div class="app-shell">
+    <header class="titlebar">
+      <div class="brand" aria-label="Selene Windows Home">
+        <span class="brand-pebble" aria-hidden="true">
+          <span class="brand-pebble-core"></span>
+        </span>
+        <span class="brand-name">Selene</span>
+        <span class="version-badge">Home</span>
+      </div>
+    </header>
 
-  <main>
-    <div class="welcome">
-      <h1>Selene</h1>
-      <p>Windows Home v0.2</p>
+    <div class="app-body" data-sidebar-collapsed="false">
+      <aside class="sidebar" data-collapsed="false" aria-label="Application sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-heading">Workspace</span>
+          <button
+            class="icon-button sidebar-toggle"
+            id="sidebar-toggle"
+            type="button"
+            aria-label="Collapse sidebar"
+            aria-controls="primary-navigation recent-conversations"
+            aria-expanded="true"
+            title="Collapse sidebar"
+          >
+            <img class="reicon" src="../../assets/icons/sidebar-left2.svg" alt="" aria-hidden="true">
+          </button>
+        </div>
+
+        <nav class="primary-navigation" id="primary-navigation" aria-label="Primary navigation">
+          <button class="nav-item is-current" type="button" aria-current="page" data-action="new-chat" title="New Chat">
+            <img class="reicon" src="../../assets/icons/message-add2.svg" alt="" aria-hidden="true">
+            <span class="nav-label">New Chat</span>
+          </button>
+          <button class="nav-item" type="button" data-placeholder="search" title="Search Conversations — integration unavailable">
+            <img class="reicon" src="../../assets/icons/search-normal2.svg" alt="" aria-hidden="true">
+            <span class="nav-label">Search Conversations</span>
+          </button>
+          <button class="nav-item" type="button" data-placeholder="projects" title="Projects — integration unavailable">
+            <img class="reicon" src="../../assets/icons/folder2.svg" alt="" aria-hidden="true">
+            <span class="nav-label">Projects</span>
+          </button>
+          <button class="nav-item" type="button" data-placeholder="devices" title="Devices — integration unavailable">
+            <img class="reicon" src="../../assets/icons/monitor3.svg" alt="" aria-hidden="true">
+            <span class="nav-label">Devices</span>
+          </button>
+        </nav>
+
+        <section class="recent-conversations" id="recent-conversations" aria-labelledby="recent-title">
+          <h2 class="section-label" id="recent-title">Recent</h2>
+          <div class="recent-empty">
+            <span class="empty-icon" aria-hidden="true">
+              <img class="reicon" src="../../assets/icons/message3.svg" alt="">
+            </span>
+            <p class="empty-title">No conversations yet</p>
+            <p class="empty-copy">Your recent chats will appear here.</p>
+          </div>
+        </section>
+
+        <div class="sidebar-footer">
+          <button class="nav-item" type="button" data-placeholder="settings" title="Settings — integration unavailable">
+            <img class="reicon" src="../../assets/icons/setting2.svg" alt="" aria-hidden="true">
+            <span class="nav-label">Settings</span>
+          </button>
+          <div class="local-status" title="Local interface preview — Selene Core is not connected">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span class="status-label">Local preview</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <div class="environment" aria-hidden="true"></div>
+        <div class="environment-shade" aria-hidden="true"></div>
+
+        <div class="workspace-toolbar">
+          <button
+            class="constellation-control"
+            type="button"
+            data-placeholder="constellation"
+            aria-label="Constellation unavailable"
+            title="Constellation is unavailable until Selene Core is connected"
+          >
+            <span class="constellation-mark" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </span>
+            <span class="constellation-copy">
+              <span class="constellation-name">Constellation</span>
+              <span class="constellation-state">Unavailable</span>
+            </span>
+          </button>
+        </div>
+
+        <section class="landing" aria-labelledby="landing-title">
+          <div class="home-pebble" aria-label="Selene" role="img">
+            <span class="home-pebble-glass">
+              <span class="home-pebble-inner"></span>
+            </span>
+          </div>
+
+          <p class="time-greeting" id="time-greeting">Hello.</p>
+          <h1 id="landing-title">What are we working on?</h1>
+          <p class="landing-copy">Think, create, and organize from one calm workspace.</p>
+
+          <form class="composer" id="composer" novalidate>
+            <label class="sr-only" for="composer-input">Message Selene</label>
+            <textarea
+              id="composer-input"
+              name="message"
+              rows="1"
+              maxlength="8000"
+              placeholder="Ask Selene anything…"
+              aria-describedby="composer-hint composer-status"
+            ></textarea>
+            <div class="composer-footer">
+              <span class="composer-hint" id="composer-hint">Enter to send · Shift + Enter for a new line</span>
+              <button class="send-button" id="send-button" type="submit" disabled aria-label="Send message">
+                <span aria-hidden="true">↑</span>
+              </button>
+            </div>
+          </form>
+
+          <p class="composer-status" id="composer-status" role="status" aria-live="polite"></p>
+
+          <div class="quick-actions" aria-label="Quick actions">
+            <button type="button" class="quick-action" data-placeholder="continue">
+              <img class="reicon" src="../../assets/icons/message3.svg" alt="" aria-hidden="true">
+              <span>Continue a conversation</span>
+            </button>
+            <button type="button" class="quick-action" data-placeholder="projects">
+              <img class="reicon" src="../../assets/icons/folder2.svg" alt="" aria-hidden="true">
+              <span>Open a project</span>
+            </button>
+            <button type="button" class="quick-action" data-placeholder="devices">
+              <img class="reicon" src="../../assets/icons/monitor3.svg" alt="" aria-hidden="true">
+              <span>Check my devices</span>
+            </button>
+          </div>
+        </section>
+      </main>
     </div>
-  </main>
+  </div>
+
+  <script src="viewState.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
