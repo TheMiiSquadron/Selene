@@ -36,6 +36,9 @@ Thumbs.db
 # Editor files
 .vscode/
 
+# Locally licensed Windows Home font assets
+homes/windows/fonts/Dual-300.otf
+
 # Apple / Xcode generated and user data
 **/DerivedData/
 **/xcuserdata/

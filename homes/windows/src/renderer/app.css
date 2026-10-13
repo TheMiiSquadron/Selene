@@ -12,11 +12,13 @@
   --sidebar-end: rgba(13, 12, 17, 0.99);
   --workspace-background: #0d0b12;
   --environment-image: url("../../backgrounds/selene-obsidian-default.png");
-  --environment-opacity: 0.62;
-  --shade-top: rgba(10, 8, 14, 0.5);
-  --shade-bottom: rgba(10, 8, 14, 0.76);
-  --shade-radial: rgba(10, 8, 14, 0.64);
-  --shade-edge: rgba(10, 8, 14, 0.5);
+  --environment-opacity: 0.72;
+  --environment-brightness: 1.04;
+  --environment-saturation: 1.1;
+  --shade-top: rgba(10, 8, 14, 0.4);
+  --shade-bottom: rgba(10, 8, 14, 0.62);
+  --shade-radial: rgba(10, 8, 14, 0.52);
+  --shade-edge: rgba(10, 8, 14, 0.4);
   --surface: rgba(25, 21, 33, 0.72);
   --surface-raised: rgba(30, 25, 40, 0.82);
   --surface-hover: rgba(255, 255, 255, 0.055);
@@ -54,11 +56,13 @@
   --sidebar-end: rgba(17, 8, 11, 0.99);
   --workspace-background: #12070b;
   --environment-image: url("../../backgrounds/selene-ruby.png");
-  --environment-opacity: 0.58;
-  --shade-top: rgba(18, 6, 10, 0.52);
-  --shade-bottom: rgba(16, 5, 9, 0.78);
-  --shade-radial: rgba(18, 5, 10, 0.65);
-  --shade-edge: rgba(19, 5, 10, 0.54);
+  --environment-opacity: 0.68;
+  --environment-brightness: 1.02;
+  --environment-saturation: 1.06;
+  --shade-top: rgba(18, 6, 10, 0.42);
+  --shade-bottom: rgba(16, 5, 9, 0.64);
+  --shade-radial: rgba(18, 5, 10, 0.54);
+  --shade-edge: rgba(19, 5, 10, 0.43);
   --surface: rgba(45, 19, 27, 0.72);
   --surface-raised: rgba(54, 22, 31, 0.84);
   --surface-hover: rgba(255, 230, 235, 0.06);
@@ -91,11 +95,13 @@
   --sidebar-end: rgba(6, 13, 24, 0.99);
   --workspace-background: #050d18;
   --environment-image: url("../../backgrounds/selene-sapphire.png");
-  --environment-opacity: 0.6;
-  --shade-top: rgba(4, 10, 19, 0.5);
-  --shade-bottom: rgba(3, 9, 18, 0.78);
-  --shade-radial: rgba(3, 10, 21, 0.64);
-  --shade-edge: rgba(3, 9, 18, 0.53);
+  --environment-opacity: 0.7;
+  --environment-brightness: 1.03;
+  --environment-saturation: 1.08;
+  --shade-top: rgba(4, 10, 19, 0.4);
+  --shade-bottom: rgba(3, 9, 18, 0.64);
+  --shade-radial: rgba(3, 10, 21, 0.52);
+  --shade-edge: rgba(3, 9, 18, 0.42);
   --surface: rgba(14, 31, 51, 0.72);
   --surface-raised: rgba(17, 38, 62, 0.84);
   --surface-hover: rgba(225, 240, 255, 0.06);
@@ -573,6 +579,7 @@ textarea:focus-visible {
   background-image: var(--environment-image);
   background-position: center;
   background-size: cover;
+  filter: brightness(var(--environment-brightness)) saturate(var(--environment-saturation));
   opacity: var(--environment-opacity);
 }
 
