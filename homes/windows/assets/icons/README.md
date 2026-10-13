@@ -13,6 +13,7 @@ Included upstream icon names:
 - `setting2`
 - `sidebar-left2`
 - `message3`
+- `microphone2`
 
 Reicon is distributed under the MIT License. The upstream license notice is
 preserved in `LICENSE.reicon.txt`. The icons are bundled locally so Windows

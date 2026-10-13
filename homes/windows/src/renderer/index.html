@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="obsidian">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -68,7 +68,7 @@
         </section>
 
         <div class="sidebar-footer">
-          <button class="nav-item" type="button" data-placeholder="settings" title="Settings — integration unavailable">
+          <button class="nav-item" type="button" data-action="settings" title="Settings">
             <img class="reicon" src="../../assets/icons/setting2.svg" alt="" aria-hidden="true">
             <span class="nav-label">Settings</span>
           </button>
@@ -101,7 +101,7 @@
           </button>
         </div>
 
-        <section class="landing" aria-labelledby="landing-title">
+        <section class="landing app-view" id="home-view" aria-labelledby="landing-title">
           <div class="home-pebble" aria-label="Selene" role="img">
             <span class="home-pebble-glass">
               <span class="home-pebble-inner"></span>
@@ -113,21 +113,53 @@
           <p class="landing-copy">Think, create, and organize from one calm workspace.</p>
 
           <form class="composer" id="composer" novalidate>
+            <button
+              class="composer-control composer-add"
+              type="button"
+              data-placeholder="attachments"
+              aria-label="Add an attachment"
+              title="Attachments are not available yet"
+            >
+              <span aria-hidden="true">+</span>
+            </button>
             <label class="sr-only" for="composer-input">Message Selene</label>
             <textarea
               id="composer-input"
               name="message"
               rows="1"
               maxlength="8000"
-              placeholder="Ask Selene anything…"
+              placeholder="Ask Selene"
               aria-describedby="composer-hint composer-status"
             ></textarea>
-            <div class="composer-footer">
-              <span class="composer-hint" id="composer-hint">Enter to send · Shift + Enter for a new line</span>
+
+            <div class="composer-actions">
+              <button
+                class="composer-mode"
+                type="button"
+                data-placeholder="mode"
+                aria-label="Conversation mode: Instant"
+                title="Conversation modes are not available yet"
+              >
+                <span>Instant</span>
+                <span class="mode-chevron" aria-hidden="true"></span>
+              </button>
+
+              <button
+                class="composer-control microphone-button"
+                type="button"
+                data-placeholder="voice"
+                aria-label="Start voice input"
+                title="Voice input is not available yet"
+              >
+                <img class="reicon" src="../../assets/icons/microphone2.svg" alt="" aria-hidden="true">
+              </button>
+
               <button class="send-button" id="send-button" type="submit" disabled aria-label="Send message">
                 <span aria-hidden="true">↑</span>
               </button>
             </div>
+
+            <span class="sr-only" id="composer-hint">Enter to send. Shift plus Enter for a new line.</span>
           </form>
 
           <p class="composer-status" id="composer-status" role="status" aria-live="polite"></p>
@@ -146,6 +178,63 @@
               <span>Check my devices</span>
             </button>
           </div>
+        </section>
+
+        <section class="settings-view app-view" id="settings-view" aria-labelledby="settings-title" hidden>
+          <header class="settings-header">
+            <p class="settings-eyebrow">Settings</p>
+            <h1 id="settings-title">Appearance</h1>
+            <p>Choose the environment Selene uses across Windows Home.</p>
+          </header>
+
+          <section class="settings-panel" aria-labelledby="environment-title">
+            <div class="settings-panel-heading">
+              <div>
+                <h2 id="environment-title">Environment</h2>
+                <p>Background, surfaces, and accent colors update immediately.</p>
+              </div>
+            </div>
+
+            <div class="theme-choices" role="radiogroup" aria-label="Selene environment">
+              <button class="theme-choice" type="button" role="radio" aria-checked="true" data-theme-choice="obsidian">
+                <span class="theme-preview theme-preview-obsidian" aria-hidden="true">
+                  <span class="theme-preview-surface"></span>
+                  <span class="theme-preview-accent"></span>
+                </span>
+                <span class="theme-choice-copy">
+                  <span class="theme-choice-name">Obsidian</span>
+                  <span class="theme-choice-description">Violet on deep charcoal</span>
+                </span>
+                <span class="theme-check" aria-hidden="true">&#10003;</span>
+              </button>
+
+              <button class="theme-choice" type="button" role="radio" aria-checked="false" data-theme-choice="ruby">
+                <span class="theme-preview theme-preview-ruby" aria-hidden="true">
+                  <span class="theme-preview-surface"></span>
+                  <span class="theme-preview-accent"></span>
+                </span>
+                <span class="theme-choice-copy">
+                  <span class="theme-choice-name">Ruby</span>
+                  <span class="theme-choice-description">Crimson on dark burgundy</span>
+                </span>
+                <span class="theme-check" aria-hidden="true">&#10003;</span>
+              </button>
+
+              <button class="theme-choice" type="button" role="radio" aria-checked="false" data-theme-choice="sapphire">
+                <span class="theme-preview theme-preview-sapphire" aria-hidden="true">
+                  <span class="theme-preview-surface"></span>
+                  <span class="theme-preview-accent"></span>
+                </span>
+                <span class="theme-choice-copy">
+                  <span class="theme-choice-name">Sapphire</span>
+                  <span class="theme-choice-description">Blue on deep midnight</span>
+                </span>
+                <span class="theme-check" aria-hidden="true">&#10003;</span>
+              </button>
+            </div>
+
+            <p class="settings-status" id="settings-status" role="status" aria-live="polite"></p>
+          </section>
         </section>
       </main>
     </div>

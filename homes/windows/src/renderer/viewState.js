@@ -9,11 +9,15 @@
     root.SeleneViewState = viewState;
   }
 }(typeof globalThis === 'object' ? globalThis : this, () => {
+  const THEMES = Object.freeze(['obsidian', 'ruby', 'sapphire']);
   const UNAVAILABLE_MESSAGES = Object.freeze({
     search: 'Conversation search will be available after conversation integration is connected.',
     projects: 'Projects are not connected in this visual milestone.',
     devices: 'Device information is unavailable until Selene Core is connected.',
     settings: 'Settings will open in a future Windows Home milestone.',
+    attachments: 'Attachments are not available until conversation integration is connected.',
+    mode: 'Conversation modes are not available in this preview.',
+    voice: 'Voice input is not available until conversation integration is connected.',
     continue: 'There are no connected conversations to continue yet.',
     constellation: 'Constellation is unavailable until Selene Core is connected.',
     conversation: 'Conversation integration is not available yet. Your message was not sent.'
@@ -41,5 +45,9 @@
       ?? 'This part of Windows Home is not available yet.';
   }
 
-  return Object.freeze({ getTimeGreeting, getUnavailableMessage });
+  function normalizeTheme(value) {
+    return THEMES.includes(value) ? value : 'obsidian';
+  }
+
+  return Object.freeze({ getTimeGreeting, getUnavailableMessage, normalizeTheme });
 }));

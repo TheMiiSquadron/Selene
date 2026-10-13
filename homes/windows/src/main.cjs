@@ -22,15 +22,43 @@ const WINDOW_STATE_SAVE_DELAY_MS = 250;
 
 const SIDEBAR_GET_CHANNEL = 'selene:preferences:get-sidebar-collapsed';
 const SIDEBAR_SET_CHANNEL = 'selene:preferences:set-sidebar-collapsed';
+const THEME_GET_CHANNEL = 'selene:preferences:get-theme';
+const THEME_SET_CHANNEL = 'selene:preferences:set-theme';
 
-function registerUiPreferenceHandlers() {
-  const preferencePath = path.join(app.getPath('userData'), UI_PREFERENCES_FILENAME);
-  const preferenceStore = createUiPreferencesStore(preferencePath);
+const NATIVE_THEME_COLORS = Object.freeze({
+  obsidian: Object.freeze({ color: '#0e0d13', symbolColor: '#e8e5f0' }),
+  ruby: Object.freeze({ color: '#160b0f', symbolColor: '#f4e8eb' }),
+  sapphire: Object.freeze({ color: '#08111e', symbolColor: '#e8f0fa' })
+});
+
+function updateWindowTheme(win, theme) {
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+
+  const colors = NATIVE_THEME_COLORS[theme] ?? NATIVE_THEME_COLORS.obsidian;
+  try {
+    win.setBackgroundColor(colors.color);
+    if (typeof win.setTitleBarOverlay === 'function') {
+      win.setTitleBarOverlay({ ...colors, height: 40 });
+    }
+  } catch (error) {
+    console.warn(`Unable to update Selene native theme: ${error.message}`);
+  }
+}
+
+function registerUiPreferenceHandlers(preferenceStore) {
 
   ipcMain.handle(SIDEBAR_GET_CHANNEL, () => preferenceStore.getSidebarCollapsed());
   ipcMain.handle(SIDEBAR_SET_CHANNEL, (_event, collapsed) => (
     preferenceStore.setSidebarCollapsed(collapsed)
   ));
+  ipcMain.handle(THEME_GET_CHANNEL, () => preferenceStore.getTheme());
+  ipcMain.handle(THEME_SET_CHANNEL, (_event, theme) => {
+    const selectedTheme = preferenceStore.setTheme(theme);
+    BrowserWindow.getAllWindows().forEach((win) => updateWindowTheme(win, selectedTheme));
+    return selectedTheme;
+  });
 }
 
 function persistWindowState(win, statePath) {
@@ -73,9 +101,11 @@ function trackWindowState(win, statePath) {
   });
 }
 
-function createWindow() {
+function createWindow(preferenceStore) {
   const statePath = path.join(app.getPath('userData'), WINDOW_STATE_FILENAME);
   const savedState = loadWindowState(statePath);
+  const theme = preferenceStore.getTheme();
+  const nativeTheme = NATIVE_THEME_COLORS[theme] ?? NATIVE_THEME_COLORS.obsidian;
   const restoredBounds = savedState
     ? recoverWindowBounds(savedState.bounds, screen.getAllDisplays(), screen.getPrimaryDisplay())
     : null;
@@ -86,12 +116,12 @@ function createWindow() {
     minWidth: 800,
     minHeight: 550,
     show: false,
-    backgroundColor: '#0e0d13',
+    backgroundColor: nativeTheme.color,
     title: 'Selene',
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#0e0d13',
-      symbolColor: '#e8e5f0',
+      color: nativeTheme.color,
+      symbolColor: nativeTheme.symbolColor,
       height: 40
     },
     webPreferences: {
@@ -115,12 +145,15 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  registerUiPreferenceHandlers();
-  createWindow();
+  const preferencePath = path.join(app.getPath('userData'), UI_PREFERENCES_FILENAME);
+  const preferenceStore = createUiPreferencesStore(preferencePath);
+
+  registerUiPreferenceHandlers(preferenceStore);
+  createWindow(preferenceStore);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      createWindow(preferenceStore);
     }
   });
 });
