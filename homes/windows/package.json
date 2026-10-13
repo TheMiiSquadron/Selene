@@ -5,7 +5,8 @@
   "main": "src/main.cjs",
   "scripts": {
     "start": "electron .",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test src/windowState.test.cjs",
+    "check": "node --check src/main.cjs && node --check src/windowState.cjs && node --test src/windowState.test.cjs"
   },
   "keywords": [],
   "author": "",
