@@ -1,4 +1,11 @@
 const panel = document.querySelector("#panel");
+const chatView = document.querySelector("#chat-view");
+const devicesSecurityView = document.querySelector("#devices-security-view");
+const backToChatButton = document.querySelector("#back-to-chat");
+const headerMenuButton = document.querySelector("#header-menu-button");
+const headerMenu = document.querySelector("#header-menu");
+const headerMenuItems = [...document.querySelectorAll("#header-menu [role^='menuitem']")];
+const themeChoices = [...document.querySelectorAll("[data-theme-choice]")];
 const conversation = document.querySelector("#conversation");
 const messageList = document.querySelector("#message-list");
 const input = document.querySelector("#nova-input");
@@ -17,6 +24,7 @@ const pairingCheckButton = document.querySelector("#pairing-check");
 const pairingStartButton = document.querySelector("#pairing-start");
 const pairingCancelButton = document.querySelector("#pairing-cancel");
 const stateSwitcher = document.querySelector("#state-switcher");
+const status = document.querySelector("#panel-status");
 const statusText = document.querySelector("#panel-status-text");
 
 const stateDefinitions = window.novaPanel.getStateDefinitions();
@@ -24,15 +32,6 @@ const stateById = new Map(
   stateDefinitions.states.map((state) => [state.id, state]),
 );
 const stateAliases = stateDefinitions.aliases ?? {};
-
-const STATE_LABELS = {
-  idle: "Ready",
-  working: "Working",
-  success: "Done",
-  asking: "Needs approval",
-  error: "Error",
-  proactive: "New",
-};
 
 let currentState = "idle";
 let isSubmitting = false;
@@ -46,6 +45,11 @@ let pairingState = window.SelenePairingPanelState.createInitialPairingState();
 let pairingCountdownTimer = 0;
 let pairingRefreshTimer = 0;
 let pairingBusy = false;
+let panelViewState = window.SelenePanelViewState.createInitialPanelViewState();
+const APPEARANCE_STORAGE_KEY = "selene-pebble-appearance-theme";
+let panelChromeState = window.SelenePanelChromeState.createInitialPanelChromeState(
+  loadStoredAppearanceTheme(),
+);
 const displayedProactiveNotifications = new Set();
 const ACTIVE_STATES = new Set([
   "working",
@@ -80,6 +84,45 @@ function normalizeState(state) {
   return stateById.has(canonical)
     ? canonical
     : "idle";
+}
+
+
+function loadStoredAppearanceTheme() {
+  try {
+    return window.localStorage.getItem(APPEARANCE_STORAGE_KEY) ?? "obsidian";
+  } catch {
+    return "obsidian";
+  }
+}
+
+
+function applyAppearanceTheme(theme, {
+  persist = true,
+} = {}) {
+  panelChromeState = window.SelenePanelChromeState.selectAppearanceTheme(
+    panelChromeState,
+    theme,
+  );
+
+  document.documentElement.dataset.theme = panelChromeState.theme;
+
+  for (const choice of themeChoices) {
+    choice.setAttribute(
+      "aria-checked",
+      String(choice.dataset.themeChoice === panelChromeState.theme),
+    );
+  }
+
+  if (persist) {
+    try {
+      window.localStorage.setItem(
+        APPEARANCE_STORAGE_KEY,
+        panelChromeState.theme,
+      );
+    } catch {
+      // Appearance remains usable for this session if storage is unavailable.
+    }
+  }
 }
 
 
@@ -142,13 +185,12 @@ function measureIntrinsicPanelHeight() {
    * The conversation is normally the flexible/scrollable region.
    * For measurement, let it expand to its full natural height.
    */
-  const cloneConversation =
-    clone.querySelector("#conversation") ||
-    clone.querySelector(".conversation");
+  const cloneScrollRegions =
+    clone.querySelectorAll(".panel-scroll-region");
 
-  if (cloneConversation) {
+  for (const cloneScrollRegion of cloneScrollRegions) {
     Object.assign(
-      cloneConversation.style,
+      cloneScrollRegion.style,
       {
         flex: "none",
         height: "auto",
@@ -246,6 +288,86 @@ function resetResizeMeasurement() {
   requestPanelResize({
     force: true,
   });
+}
+
+
+/* ============================================================
+   Panel chrome and view navigation
+   ============================================================ */
+
+function setHeaderMenuOpen(open, {
+  focusFirst = false,
+  restoreFocus = false,
+} = {}) {
+  panelChromeState = window.SelenePanelChromeState.setMenuOpen(
+    panelChromeState,
+    open,
+  );
+
+  if (headerMenu) headerMenu.hidden = !panelChromeState.menuOpen;
+  headerMenuButton?.setAttribute(
+    "aria-expanded",
+    String(panelChromeState.menuOpen),
+  );
+
+  if (panelChromeState.menuOpen && focusFirst) {
+    requestAnimationFrame(() => headerMenuItems[0]?.focus());
+  } else if (!panelChromeState.menuOpen && restoreFocus) {
+    requestAnimationFrame(() => headerMenuButton?.focus());
+  }
+
+  resetResizeMeasurement();
+}
+
+
+function moveHeaderMenuFocus(direction) {
+  if (!headerMenuItems.length) return;
+
+  const currentIndex = headerMenuItems.indexOf(document.activeElement);
+  const nextIndex = currentIndex < 0
+    ? 0
+    : (currentIndex + direction + headerMenuItems.length) % headerMenuItems.length;
+
+  headerMenuItems[nextIndex].focus();
+}
+
+function focusActiveView() {
+  if (panelViewState.currentView === "devices-security") {
+    backToChatButton?.focus();
+    return;
+  }
+
+  input?.focus();
+}
+
+
+function setPanelView(view, {
+  focus = true,
+  refreshPairing = true,
+} = {}) {
+  panelViewState = window.SelenePanelViewState.selectPanelView(
+    panelViewState,
+    view,
+  );
+
+  const showDevices = panelViewState.currentView === "devices-security";
+
+  if (chatView) chatView.hidden = showDevices;
+  if (devicesSecurityView) devicesSecurityView.hidden = !showDevices;
+
+  panel.dataset.view = panelViewState.currentView;
+
+  setHeaderMenuOpen(false);
+
+  if (showDevices && refreshPairing) {
+    void refreshPairingStatus();
+  }
+
+  resetResizeMeasurement();
+
+  if (focus) {
+    requestAnimationFrame(focusActiveView);
+  }
 }
 
 
@@ -391,11 +513,22 @@ function setState(state) {
   panel.dataset.state =
     currentState;
 
+  const stateDefinition = stateById.get(currentState) ?? stateById.get("idle");
+
+  panel.style.setProperty("--state-color", stateDefinition.color);
+  panel.style.setProperty("--state-bloom", stateDefinition.bloom);
+  panel.style.setProperty("--state-halo", stateDefinition.halo);
+
   if (statusText) {
-    statusText.textContent =
-      STATE_LABELS[currentState] ??
-      stateById.get(currentState)?.label ??
-      "Ready";
+    statusText.textContent = stateDefinition.label;
+    statusText.title = stateDefinition.meaning;
+  }
+
+  if (status) {
+    status.setAttribute(
+      "aria-label",
+      `${stateDefinition.label}: ${stateDefinition.meaning}`,
+    );
   }
 
   stateButtons.forEach((button) => {
@@ -731,7 +864,7 @@ async function retryApprovedCommand(
     setState("success");
     scheduleIdle(900);
 
-    input.focus();
+    focusActiveView();
 
     return;
   }
@@ -742,7 +875,7 @@ async function retryApprovedCommand(
       originalCommand,
     );
 
-    input.focus();
+    focusActiveView();
 
     return;
   }
@@ -761,7 +894,7 @@ async function retryApprovedCommand(
   setState("error");
   scheduleIdle(1400);
 
-  input.focus();
+  focusActiveView();
 }
 
 
@@ -897,7 +1030,7 @@ function denyApproval() {
 
   setState("idle");
 
-  input.focus();
+  focusActiveView();
 }
 
 
@@ -968,7 +1101,7 @@ async function submitCommand() {
         text,
       );
 
-      input.focus();
+      focusActiveView();
 
       return;
     }
@@ -1006,7 +1139,7 @@ async function submitCommand() {
 
   finally {
     setBusy(false);
-    input.focus();
+    focusActiveView();
   }
 }
 
@@ -1016,6 +1149,11 @@ async function submitCommand() {
    ============================================================ */
 
 function markOpen() {
+  setPanelView("chat", {
+    focus: false,
+    refreshPairing: false,
+  });
+
   panel.classList.remove(
     "panel--closed",
   );
@@ -1033,7 +1171,7 @@ function markOpen() {
   lastRequestedHeight = -1;
 
   requestAnimationFrame(() => {
-    input.focus();
+    focusActiveView();
 
     requestPanelResize({
       force: true,
@@ -1074,7 +1212,7 @@ async function handleProactiveNotifications(notifications) {
   }
 
   setState("idle");
-  input.focus();
+  focusActiveView();
 }
 
 
@@ -1384,6 +1522,7 @@ async function cancelPairingFromUi() {
 
 function markClosing() {
   stopPairingTimers();
+  setHeaderMenuOpen(false);
   clearDisplayedPairingSecret(
     "Pairing display cleared.",
   );
@@ -1406,6 +1545,78 @@ closeButton?.addEventListener(
   "click",
   () => {
     window.novaPanel.close();
+  },
+);
+
+
+headerMenuButton?.addEventListener(
+  "click",
+  () => {
+    setHeaderMenuOpen(!panelChromeState.menuOpen, {
+      focusFirst: !panelChromeState.menuOpen,
+    });
+  },
+);
+
+
+headerMenuButton?.addEventListener(
+  "keydown",
+  (event) => {
+    if (!["ArrowDown", "ArrowUp"].includes(event.key)) return;
+
+    event.preventDefault();
+    setHeaderMenuOpen(true, { focusFirst: true });
+  },
+);
+
+
+headerMenu?.addEventListener(
+  "keydown",
+  (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      setHeaderMenuOpen(false, { restoreFocus: true });
+      return;
+    }
+
+    if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      headerMenuItems[event.key === "Home" ? 0 : headerMenuItems.length - 1]?.focus();
+      return;
+    }
+
+    if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+      event.preventDefault();
+      moveHeaderMenuFocus(event.key === "ArrowDown" ? 1 : -1);
+    }
+  },
+);
+
+
+headerMenu?.addEventListener(
+  "click",
+  (event) => {
+    const item = event.target.closest("[role^='menuitem']");
+    if (!item) return;
+
+    if (item.dataset.menuAction === "devices-security") {
+      setPanelView("devices-security");
+      return;
+    }
+
+    if (item.dataset.themeChoice) {
+      applyAppearanceTheme(item.dataset.themeChoice);
+      setHeaderMenuOpen(false, { restoreFocus: true });
+    }
+  },
+);
+
+
+backToChatButton?.addEventListener(
+  "click",
+  () => {
+    setPanelView("chat");
   },
 );
 
@@ -1451,7 +1662,38 @@ window.addEventListener(
     ) {
       event.preventDefault();
 
+      if (panelChromeState.menuOpen) {
+        setHeaderMenuOpen(false, { restoreFocus: true });
+        return;
+      }
+
       window.novaPanel.close();
+    }
+  },
+);
+
+
+document.addEventListener(
+  "pointerdown",
+  (event) => {
+    if (
+      panelChromeState.menuOpen
+      && !event.target.closest(".panel-header-actions")
+    ) {
+      setHeaderMenuOpen(false);
+    }
+  },
+);
+
+
+document.addEventListener(
+  "focusin",
+  (event) => {
+    if (
+      panelChromeState.menuOpen
+      && !event.target.closest(".panel-header-actions")
+    ) {
+      setHeaderMenuOpen(false);
     }
   },
 );
@@ -1600,6 +1842,26 @@ window.SelenePanelDebug = {
     return currentState;
   },
 
+  getView() {
+    return panelViewState.currentView;
+  },
+
+  setView(view) {
+    setPanelView(view);
+  },
+
+  getTheme() {
+    return panelChromeState.theme;
+  },
+
+  setTheme(theme) {
+    applyAppearanceTheme(theme, { persist: false });
+  },
+
+  isMenuOpen() {
+    return panelChromeState.menuOpen;
+  },
+
   measureHeight() {
     return measureIntrinsicPanelHeight();
   },
@@ -1716,6 +1978,8 @@ if (pairingCard) {
 /* ============================================================
    Start
    ============================================================ */
+
+applyAppearanceTheme(panelChromeState.theme, { persist: false });
 
 renderStateControls();
 

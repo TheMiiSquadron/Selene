@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="obsidian">
   <head>
     <meta charset="UTF-8">
     <meta
@@ -24,54 +24,186 @@
     >
       <header class="panel-header">
         <div class="panel-identity">
-          <span class="panel-name">Selene</span>
+          <span class="panel-brand-mark" aria-hidden="true"></span>
 
-          <span class="panel-status">
+          <span class="panel-identity-copy">
+            <span class="panel-name">Selene</span>
+
             <span
-              class="panel-status-dot"
-              aria-hidden="true"
-            ></span>
+              id="panel-status"
+              class="panel-status"
+              aria-label="Idle: I'm here."
+            >
+              <span
+                class="panel-status-dot"
+                aria-hidden="true"
+              ></span>
 
-            <span id="panel-status-text">
-              Ready
+              <span id="panel-status-text">
+                Idle
+              </span>
             </span>
           </span>
         </div>
 
-        <button
-          type="button"
-          id="close-panel"
-          class="panel-close"
-          aria-label="Close Selene"
-          title="Close (Esc)"
-        >
-          ×
-        </button>
+        <div class="panel-header-actions">
+          <button
+            type="button"
+            id="header-menu-button"
+            class="panel-menu-button"
+            aria-label="Open Selene menu"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            aria-controls="header-menu"
+            title="More options"
+          >
+            <span aria-hidden="true">•••</span>
+          </button>
+
+          <div
+            id="header-menu"
+            class="panel-menu"
+            role="menu"
+            aria-label="Selene options"
+            hidden
+          >
+            <button
+              type="button"
+              class="panel-menu-item"
+              role="menuitem"
+              data-menu-action="devices-security"
+            >
+              Devices &amp; Security
+            </button>
+
+            <div class="panel-menu-separator" role="separator"></div>
+            <span class="panel-menu-label" role="presentation">Appearance</span>
+
+            <button
+              type="button"
+              class="panel-menu-item panel-menu-theme"
+              role="menuitemradio"
+              aria-checked="true"
+              data-theme-choice="obsidian"
+            >
+              <span class="theme-swatch theme-swatch--obsidian" aria-hidden="true"></span>
+              Obsidian
+            </button>
+
+            <button
+              type="button"
+              class="panel-menu-item panel-menu-theme"
+              role="menuitemradio"
+              aria-checked="false"
+              data-theme-choice="ruby"
+            >
+              <span class="theme-swatch theme-swatch--ruby" aria-hidden="true"></span>
+              Ruby
+            </button>
+
+            <button
+              type="button"
+              class="panel-menu-item panel-menu-theme"
+              role="menuitemradio"
+              aria-checked="false"
+              data-theme-choice="sapphire"
+            >
+              <span class="theme-swatch theme-swatch--sapphire" aria-hidden="true"></span>
+              Sapphire
+            </button>
+          </div>
+
+          <button
+            type="button"
+            id="close-panel"
+            class="panel-close"
+            aria-label="Close Selene"
+            title="Close (Esc)"
+          >
+            ×
+          </button>
+        </div>
       </header>
 
       <section
-        id="conversation"
-        class="conversation"
-        aria-label="Conversation"
+        id="chat-view"
+        class="panel-view chat-view"
+        aria-label="Chat"
       >
-        <div
-          id="message-list"
-          class="message-list"
-          aria-live="polite"
-        ></div>
+        <section
+          id="conversation"
+          class="conversation panel-scroll-region"
+          aria-label="Conversation"
+        >
+          <div
+            id="message-list"
+            class="message-list"
+            aria-live="polite"
+          ></div>
+
+          <div
+            id="response-message"
+            class="response-message"
+            role="status"
+            aria-live="polite"
+          ></div>
+
+          <div
+            id="approval-card"
+            class="approval-card"
+            hidden
+          ></div>
+        </section>
 
         <div
-          id="response-message"
-          class="response-message"
-          role="status"
-          aria-live="polite"
-        ></div>
-
-        <div
-          id="approval-card"
-          class="approval-card"
+          id="state-switcher"
+          class="state-switcher"
+          aria-label="Pebble state preview"
           hidden
         ></div>
+
+        <div class="composer">
+          <input
+            id="nova-input"
+            type="text"
+            placeholder="Ask Selene..."
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Ask Selene"
+          >
+
+          <button
+            type="button"
+            id="send-command"
+            class="composer-send"
+            aria-label="Send"
+            title="Send"
+          >
+            <span aria-hidden="true">↑</span>
+          </button>
+        </div>
+      </section>
+
+      <section
+        id="devices-security-view"
+        class="panel-view devices-security-view panel-scroll-region"
+        aria-labelledby="devices-security-heading"
+        hidden
+      >
+        <div class="secondary-view-header">
+          <button
+            type="button"
+            id="back-to-chat"
+            class="secondary-view-back"
+            aria-label="Back to Chat"
+            title="Back to Chat"
+          >
+            <span aria-hidden="true">←</span>
+            <span>Back to Chat</span>
+          </button>
+
+          <h1 id="devices-security-heading">Devices &amp; Security</h1>
+        </div>
 
         <section
           id="pairing-card"
@@ -140,36 +272,10 @@
           </div>
         </section>
       </section>
-
-      <div
-        id="state-switcher"
-        class="state-switcher"
-        aria-label="Pebble state preview"
-        hidden
-      ></div>
-
-      <div class="composer">
-        <input
-          id="nova-input"
-          type="text"
-          placeholder="Ask Selene..."
-          autocomplete="off"
-          spellcheck="false"
-          aria-label="Ask Selene"
-        >
-
-        <button
-          type="button"
-          id="send-command"
-          class="composer-send"
-          aria-label="Send"
-          title="Send"
-        >
-          <span aria-hidden="true">↑</span>
-        </button>
-      </div>
     </main>
 
+    <script src="../shared/panelChromeState.cjs"></script>
+    <script src="../shared/panelViewState.cjs"></script>
     <script src="../shared/pairingPanelState.cjs"></script>
     <script src="./panel.js"></script>
   </body>
