@@ -14,8 +14,8 @@ struct SeleneApp: App {
     init() {
         let configuration = AppConfiguration.development
 
-        guard let api = try? CompanionAPIClient(baseURL: configuration.companionBaseURL) else {
-            preconditionFailure("Invalid Companion configuration.")
+        guard let api = try? SeleneLinkAPIClient(baseURL: configuration.companionBaseURL) else {
+            preconditionFailure("Invalid Selene Link configuration.")
         }
 
         _viewModel = State(initialValue: ChatViewModel(configuration: configuration, api: api))
