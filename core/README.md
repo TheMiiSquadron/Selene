@@ -53,11 +53,11 @@ Setup/status endpoints:
 
 The command server on port `3030` is privileged and remains loopback-only.
 
-## Companion transport and LAN access
+## Selene Link transport and LAN access
 
-The non-privileged Companion API listens over HTTP on `127.0.0.1:8787` by
+The non-privileged Selene Link service (formerly Companion API) listens over HTTP on `127.0.0.1:8787` by
 default. Optional HTTPS uses Node's built-in TLS server and the same routes on
-port `8787`. Set all three variables before starting Core:
+port `8787`. Set all three variables before starting Core. The `SELENE_COMPANION_*` environment variable names are retained for compatibility until a tested migration:
 
     $env:SELENE_COMPANION_HTTPS = "1"
     $env:SELENE_COMPANION_TLS_CERT_PATH = "C:\SeleneSecrets\cert.pem"
@@ -72,20 +72,20 @@ renew production certificates. Invalid configuration or TLS material prevents
 startup rather than falling back to HTTP. `SELENE_COMPANION_HTTPS` accepts only
 `1` (HTTPS), `0` or unset/empty (HTTP). TLS paths are forbidden in HTTP mode.
 
-To make only the Companion API reachable from trusted local devices, also set
+To make only Selene Link reachable from trusted local devices, also set
 the explicit LAN flag:
 
     $env:SELENE_COMPANION_LAN = "1"
     npm start
 
-LAN mode binds Companion to `0.0.0.0:8787` with the selected protocol. Clients
+LAN mode binds Selene Link to `0.0.0.0:8787` with the selected protocol. Clients
 must connect to NOVA's actual hostname or address, not `0.0.0.0`. HTTPS clients
 must trust the issuing CA and use a hostname or IP address present in the
 certificate's subject alternative names. The privileged Core server remains
 loopback-only at `127.0.0.1:3030`.
 
-Companion access is still unauthenticated. Legacy plaintext HTTP LAN mode
-remains temporarily available for compatibility, but Gateway bearer credentials
+Selene Link access is still unauthenticated. Legacy plaintext HTTP LAN mode
+remains temporarily available for compatibility, but Selene Link bearer credentials
 must **never** be transmitted over plaintext HTTP. Do not configure clients to
 disable certificate validation. Scope any external Windows Firewall rule to
 TCP port `8787` on the Private profile and trusted local devices. Do not expose
