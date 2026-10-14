@@ -42,11 +42,11 @@ nonisolated enum SeleneLinkAPIError: Error, Equatable, LocalizedError, Sendable 
         case .invalidBaseURL:
             "The Selene Link address is invalid."
         case .invalidResponse:
-            "The Selene Link returned an invalid response."
+            "Selene Link returned an invalid response."
         case .malformedResponse:
-            "The Selene Link returned an unreadable response."
+            "Selene Link returned an unreadable response."
         case .httpStatus(let statusCode):
-            "The Companion request failed with HTTP status \(statusCode)."
+            "The Selene Link request failed with HTTP status \(statusCode)."
         case .server(_, let message, _):
             message
         }

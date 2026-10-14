@@ -4,7 +4,7 @@ import Testing
 
 @Suite(.serialized)
 struct SeleneLinkAPITests {
-    @Test("Health uses GET and decodes the Companion response")
+    @Test("Health uses GET and decodes the Selene Link response")
     func healthRequest() async throws {
         let recorder = RequestRecorder()
         let (client, session) = try makeClient { request in
@@ -34,7 +34,7 @@ struct SeleneLinkAPITests {
         ))
     }
 
-    @Test("Chat uses POST with JSON and decodes the Companion response")
+    @Test("Chat uses POST with JSON and decodes the Selene Link response")
     func chatRequest() async throws {
         let recorder = RequestRecorder()
         let (client, session) = try makeClient { request in
@@ -80,7 +80,7 @@ struct SeleneLinkAPITests {
 
         do {
             _ = try await client.sendChat(message: "")
-            Issue.record("Expected a structured Companion API error.")
+            Issue.record("Expected a structured Selene Link API error.")
         } catch let error as SeleneLinkAPIError {
             #expect(error == .server(
                 code: "INVALID_MESSAGE",
@@ -126,7 +126,7 @@ struct SeleneLinkAPITests {
         }
     }
 
-    @Test("Client accepts only the Companion port")
+    @Test("Client accepts only the Selene Link port")
     func rejectsPrivilegedPorts() throws {
         #expect(AppConfiguration.development.companionBaseURL.port == 8787)
 

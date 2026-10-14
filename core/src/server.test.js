@@ -91,7 +91,7 @@ test("invalid Companion configuration prevents every listener from opening", asy
   assert.deepEqual(messages, []);
 });
 
-test("Core bind failure closes an already-open Companion listener", async () => {
+test("Core bind failure closes an already-open Selene Link listener", async () => {
   const occupied = http.createServer((_request, response) => response.end());
   const occupiedPort = await listen(occupied);
   let companionPort;
@@ -115,7 +115,7 @@ test("Core bind failure closes an already-open Companion listener", async () => 
   }
 });
 
-test("Companion bind failure does not open the Core listener", async () => {
+test("Selene Link bind failure does not open the Core listener", async () => {
   const occupied = http.createServer((_request, response) => response.end());
   const occupiedPort = await listen(occupied);
   const coreMessages = [];
@@ -127,7 +127,7 @@ test("Companion bind failure does not open the Core listener", async () => {
       companionPort: occupiedPort,
       onCoreListening(message) { coreMessages.push(message); },
       onCompanionError(message) { companionErrors.push(message); },
-    }), /Companion API failed to start/);
+    }), /Selene Link failed to start/);
     assert.deepEqual(coreMessages, []);
     assert.match(companionErrors[0], /port is already in use/);
   } finally {

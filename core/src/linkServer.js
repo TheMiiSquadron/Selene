@@ -706,7 +706,7 @@ export function startLinkServer({
 } = {}) {
   if (transport !== undefined) {
     throw new LinkTransportConfigurationError(
-      "Companion transport overrides are not supported; configure HTTPS through the environment.",
+      "Selene Link transport overrides are not supported; configure HTTPS through the environment.",
     );
   }
   const configuration = prepareLinkTransport(env);
