@@ -2,7 +2,7 @@
 
 **One assistant. Twelve capabilities. A modular architecture.**
 
-> Project reference and development roadmap. Update this document as architectural decisions and milestones are approved.
+> Project reference and development roadmap. [ARCHITECTURE.md](ARCHITECTURE.md) is the canonical reference for component names, relationships, and boundaries. Update this document as architectural decisions and milestones are approved.
 
 ## 1. Vision
 
@@ -22,6 +22,8 @@ Development priorities:
 
 ## 2. Architecture
 
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the authoritative component definitions and relationship diagram.
+
 | Component               | Purpose                                                      |
 | ----------------------- | ------------------------------------------------------------ |
 | Selene Core             | Assistant logic, models, memory, authority, and capabilities |
@@ -38,14 +40,14 @@ Development priorities:
 
 ## 3. The Homes
 
-Homes are the interfaces where Selene lives.
+Homes are the native platform environments where Selene lives. There are four Homes: Windows, macOS, iOS, and watchOS.
 
 | Home             | Platform           | Status                                        |
 | ---------------- | ------------------ | --------------------------------------------- |
 | Windows Home     | Windows / Electron | Foundation built; further development planned |
-| iPhone Home      | iOS / SwiftUI      | Active development                            |
-| Mac Home         | macOS              | Planned                                       |
-| Apple Watch Home | watchOS            | Future                                        |
+| iOS Home         | iOS / SwiftUI      | Active development                            |
+| macOS Home       | macOS              | Planned                                       |
+| watchOS Home     | watchOS            | Future                                        |
 
 ### Current priorities
 
