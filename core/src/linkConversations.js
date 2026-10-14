@@ -1,23 +1,23 @@
 import {
-  COMPANION_CHAT_SYSTEM_PROMPT,
-  CompanionChatValidationError,
-  validateCompanionChatMessage,
-} from "./companionChat.js";
+  LINK_CHAT_SYSTEM_PROMPT,
+  LinkChatValidationError,
+  validateLinkChatMessage,
+} from "./linkChat.js";
 import {
   ConversationNotFoundError,
   ConversationStoreValidationError,
 } from "./conversationStore.js";
 import { modelService as defaultModelService } from "./modelService.js";
 
-export const COMPANION_CONVERSATION_LIST_DEFAULT_LIMIT = 20;
-export const COMPANION_CONVERSATION_LIST_MAX_LIMIT = 100;
-export const COMPANION_CONVERSATION_MESSAGE_MAX_LIMIT = 200;
-export const COMPANION_CONVERSATION_CONTEXT_MAX_MESSAGES = 200;
+export const LINK_CONVERSATION_LIST_DEFAULT_LIMIT = 20;
+export const LINK_CONVERSATION_LIST_MAX_LIMIT = 100;
+export const LINK_CONVERSATION_MESSAGE_MAX_LIMIT = 200;
+export const LINK_CONVERSATION_CONTEXT_MAX_MESSAGES = 200;
 
-export class CompanionConversationValidationError extends Error {
+export class LinkConversationValidationError extends Error {
   constructor(code, message) {
     super(message);
-    this.name = "CompanionConversationValidationError";
+    this.name = "LinkConversationValidationError";
     this.code = code;
   }
 }
@@ -30,7 +30,7 @@ function requireStoreMethod(store, method) {
 
 function requireObject(value, message = "Request body must be a JSON object.") {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new CompanionConversationValidationError("INVALID_REQUEST", message);
+    throw new LinkConversationValidationError("INVALID_REQUEST", message);
   }
   return value;
 }
@@ -38,7 +38,7 @@ function requireObject(value, message = "Request body must be a JSON object.") {
 function rejectUnknownKeys(value, allowed) {
   for (const key of Object.keys(value)) {
     if (!allowed.has(key)) {
-      throw new CompanionConversationValidationError(
+      throw new LinkConversationValidationError(
         "INVALID_REQUEST",
         "The request is invalid.",
       );
@@ -50,11 +50,11 @@ function parseLimit(value, { defaultLimit, maxLimit }) {
   if (value === undefined || value === null || value === "") return defaultLimit;
   const text = String(value);
   if (!/^[1-9]\d*$/.test(text)) {
-    throw new CompanionConversationValidationError("INVALID_REQUEST", "The request is invalid.");
+    throw new LinkConversationValidationError("INVALID_REQUEST", "The request is invalid.");
   }
   const limit = Number(text);
   if (!Number.isSafeInteger(limit) || limit > maxLimit) {
-    throw new CompanionConversationValidationError("INVALID_REQUEST", "The request is invalid.");
+    throw new LinkConversationValidationError("INVALID_REQUEST", "The request is invalid.");
   }
   return limit;
 }
@@ -69,7 +69,7 @@ function encodeCursor(conversation) {
 function validateCursor(value) {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value !== "string" || value.length > 512 || !/^[A-Za-z0-9_-]+$/.test(value)) {
-    throw new CompanionConversationValidationError("INVALID_REQUEST", "The request is invalid.");
+    throw new LinkConversationValidationError("INVALID_REQUEST", "The request is invalid.");
   }
   try {
     const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
@@ -88,7 +88,7 @@ function validateCursor(value) {
     }
     return { updatedAt: parsed.updatedAt, id: parsed.id.toLowerCase() };
   } catch {
-    throw new CompanionConversationValidationError("INVALID_REQUEST", "The request is invalid.");
+    throw new LinkConversationValidationError("INVALID_REQUEST", "The request is invalid.");
   }
 }
 
@@ -96,10 +96,10 @@ function validateTurnPayload(payload) {
   const body = requireObject(payload);
   rejectUnknownKeys(body, new Set(["message"]));
   try {
-    return validateCompanionChatMessage(body.message);
+    return validateLinkChatMessage(body.message);
   } catch (error) {
-    if (error instanceof CompanionChatValidationError) {
-      throw new CompanionConversationValidationError(
+    if (error instanceof LinkChatValidationError) {
+      throw new LinkConversationValidationError(
         "INVALID_REQUEST",
         "The request is invalid.",
       );
@@ -110,13 +110,13 @@ function validateTurnPayload(payload) {
 
 function mapStoreError(error) {
   if (error instanceof ConversationNotFoundError) {
-    return new CompanionConversationValidationError(
+    return new LinkConversationValidationError(
       "CONVERSATION_NOT_FOUND",
       "Conversation not found.",
     );
   }
   if (error instanceof ConversationStoreValidationError) {
-    return new CompanionConversationValidationError(
+    return new LinkConversationValidationError(
       "INVALID_REQUEST",
       "The request is invalid.",
     );
@@ -127,7 +127,7 @@ function mapStoreError(error) {
 function extractAssistantReply(response) {
   const content = response?.choices?.[0]?.message?.content;
   if (typeof content !== "string" || !content.trim()) {
-    throw new CompanionConversationValidationError(
+    throw new LinkConversationValidationError(
       "MODEL_UNAVAILABLE",
       "Selene is temporarily unavailable.",
     );
@@ -135,7 +135,7 @@ function extractAssistantReply(response) {
   return content.trim();
 }
 
-export function createCompanionConversationService({
+export function createLinkConversationService({
   conversationStore,
   modelService = defaultModelService,
 } = {}) {
@@ -175,8 +175,8 @@ export function createCompanionConversationService({
   function listConversations(ownerId, { limit, cursor } = {}) {
     requireStoreMethod(conversationStore, "listConversations");
     const resolvedLimit = parseLimit(limit, {
-      defaultLimit: COMPANION_CONVERSATION_LIST_DEFAULT_LIMIT,
-      maxLimit: COMPANION_CONVERSATION_LIST_MAX_LIMIT,
+      defaultLimit: LINK_CONVERSATION_LIST_DEFAULT_LIMIT,
+      maxLimit: LINK_CONVERSATION_LIST_MAX_LIMIT,
     });
     const after = validateCursor(cursor);
 
@@ -202,7 +202,7 @@ export function createCompanionConversationService({
     requireStoreMethod(conversationStore, "getConversation");
     requireStoreMethod(conversationStore, "getMessages");
     if (limit !== undefined || cursor !== undefined) {
-      throw new CompanionConversationValidationError("INVALID_REQUEST", "The request is invalid.");
+      throw new LinkConversationValidationError("INVALID_REQUEST", "The request is invalid.");
     }
 
     try {
@@ -211,10 +211,10 @@ export function createCompanionConversationService({
         throw new ConversationNotFoundError(conversationId);
       }
       const messages = conversationStore.getMessages(ownerId, conversationId, {
-        limit: COMPANION_CONVERSATION_MESSAGE_MAX_LIMIT + 1,
+        limit: LINK_CONVERSATION_MESSAGE_MAX_LIMIT + 1,
       });
-      if (messages.length > COMPANION_CONVERSATION_MESSAGE_MAX_LIMIT) {
-        throw new CompanionConversationValidationError(
+      if (messages.length > LINK_CONVERSATION_MESSAGE_MAX_LIMIT) {
+        throw new LinkConversationValidationError(
           "CONTEXT_LIMIT_EXCEEDED",
           "Conversation context limit exceeded.",
         );
@@ -249,8 +249,8 @@ export function createCompanionConversationService({
         throw mapStoreError(error);
       }
 
-      if (history.length + 2 > COMPANION_CONVERSATION_CONTEXT_MAX_MESSAGES) {
-        throw new CompanionConversationValidationError(
+      if (history.length + 2 > LINK_CONVERSATION_CONTEXT_MAX_MESSAGES) {
+        throw new LinkConversationValidationError(
           "CONTEXT_LIMIT_EXCEEDED",
           "Conversation context limit exceeded.",
         );
@@ -261,14 +261,14 @@ export function createCompanionConversationService({
         response = await modelService.createChatCompletion({
           role: "primary",
           messages: [
-            { role: "system", content: COMPANION_CHAT_SYSTEM_PROMPT },
+            { role: "system", content: LINK_CHAT_SYSTEM_PROMPT },
             ...history.map(({ role, content }) => ({ role, content })),
             { role: "user", content: userContent },
           ],
           toolChoice: "none",
         });
       } catch {
-        throw new CompanionConversationValidationError(
+        throw new LinkConversationValidationError(
           "MODEL_UNAVAILABLE",
           "Selene is temporarily unavailable.",
         );
