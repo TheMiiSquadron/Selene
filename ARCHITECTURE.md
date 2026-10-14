@@ -59,7 +59,7 @@ A single device may host multiple components: NOVA runs Core and can also run a 
 
 **Web Companion is retired.** Its browser frontend (`companion/`) was deleted on the dedicated cleanup branch. It is **not** a Home and must not be reintroduced as a dependency for native Homes or the Pillars.
 
-**Selene Link** is the permanent product/architecture name for the backend previously called *Companion API* and provisionally *Gateway*. Existing identifiers such as `companionServer.js`, Swift `CompanionAPI` types, `gatewayCredential*` modules, and `SELENE_COMPANION_*` environment variables are implementation/compatibility names, **not** separate architectural services. Rename them only with coordinated import, client, configuration, and test updates; do not silently break existing installations.
+**Selene Link** is the permanent product/architecture name for the backend previously called *Companion API* and provisionally *Gateway*. The Core Link API modules and iOS Link client have been renamed on the cleanup branch. Existing `gatewayCredential*` modules and `SELENE_COMPANION_*` environment variables remain compatibility identifiers, **not** separate architectural services. Migrate these only with coordinated configuration and test updates; do not silently break existing installations.
 
 ## Related references
 
