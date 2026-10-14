@@ -111,14 +111,14 @@ export function prepareCompanionTransport(env = process.env) {
 
 function companionListeningMessage(host, port, scheme) {
   if (host === COMPANION_LAN_HOST) {
-    return `Selene Companion API listening on ${scheme} port ${port} (LAN mode enabled).`;
+    return `Selene Link listening on ${scheme} port ${port} (LAN mode enabled).`;
   }
 
   if (host === COMPANION_HOST) {
-    return `Selene Companion API listening on ${scheme}://${host}:${port} (loopback only).`;
+    return `Selene Link listening on ${scheme}://${host}:${port} (loopback only).`;
   }
 
-  return `Selene Companion API listening on ${scheme}://${host}:${port} (custom bind).`;
+  return `Selene Link listening on ${scheme}://${host}:${port} (custom bind).`;
 }
 
 function corsHeaders(request) {
@@ -198,11 +198,11 @@ function authenticateRequest(request, response, credentialStore) {
   }
   try {
     if (typeof credentialStore?.authenticateCredential !== "function") {
-      throw new Error("Gateway credential store unavailable.");
+      throw new Error("Selene Link credential store unavailable.");
     }
     const identity = credentialStore.authenticateCredential(credential);
     if (!identity || !Array.isArray(identity.capabilities)) {
-      throw new Error("Invalid Gateway identity.");
+      throw new Error("Invalid Selene Link identity.");
     }
     return identity;
   } catch {
@@ -735,14 +735,14 @@ export function startCompanionServer({
     server.once("error", (error) => {
       if (error.code === "EADDRINUSE") {
         onError(
-          `Selene Companion API could not start on ${scheme}://${bindHost}:${port}: port is already in use.`,
+          `Selene Link could not start on ${scheme}://${bindHost}:${port}: port is already in use.`,
         );
         settle(null);
         return;
       }
 
       onError(
-        `Selene Companion API could not start on ${scheme}://${bindHost}:${port}: ${error.message}`,
+        `Selene Link could not start on ${scheme}://${bindHost}:${port}: ${error.message}`,
       );
       settle(null);
     });
