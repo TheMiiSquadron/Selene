@@ -65,11 +65,11 @@ final class ChatViewModel {
     private(set) var isSending = false
 
     @ObservationIgnored
-    private let api: any CompanionAPIProviding
+    private let api: any SeleneLinkAPIProviding
 
     init(
         configuration: AppConfiguration,
-        api: any CompanionAPIProviding
+        api: any SeleneLinkAPIProviding
     ) {
         assistantDisplayName = configuration.assistantDisplayName
         self.api = api
@@ -214,9 +214,9 @@ final class ChatViewModel {
     private func makeIssue(
         for error: Error
     ) -> Issue {
-        guard let apiError = error as? CompanionAPIError else {
+        guard let apiError = error as? SeleneLinkAPIError else {
             return .connection(
-                "Unable to reach Companion."
+                "Unable to reach Selene Link."
             )
         }
 
@@ -228,12 +228,12 @@ final class ChatViewModel {
              .malformedResponse,
              .invalidResponse:
             return .server(
-                "Companion returned an unexpected response."
+                "Selene Link returned an unexpected response."
             )
 
         case .invalidBaseURL:
             return .connection(
-                "Companion is not configured correctly."
+                "Selene Link is not configured correctly."
             )
         }
     }

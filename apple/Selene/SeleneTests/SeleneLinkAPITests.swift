@@ -3,7 +3,7 @@ import Testing
 @testable import Selene
 
 @Suite(.serialized)
-struct CompanionAPITests {
+struct SeleneLinkAPITests {
     @Test("Health uses GET and decodes the Companion response")
     func healthRequest() async throws {
         let recorder = RequestRecorder()
@@ -25,8 +25,8 @@ struct CompanionAPITests {
         #expect(request.url?.port == 8787)
         #expect(request.value(forHTTPHeaderField: "Accept") == "application/json")
         #expect(request.httpBody == nil)
-        #expect(request.timeoutInterval == CompanionAPIClient.requestTimeout)
-        #expect(health == CompanionHealthResponse(
+        #expect(request.timeoutInterval == SeleneLinkAPIClient.requestTimeout)
+        #expect(health == LinkHealthResponse(
             ok: true,
             name: "Selene Core",
             machine: "NOVA",
@@ -50,16 +50,16 @@ struct CompanionAPITests {
         let chat = try await client.sendChat(message: "Hello")
         let request = try #require(recorder.request)
         let requestBody = try #require(request.httpBody)
-        let decodedRequest = try JSONDecoder().decode(CompanionChatRequest.self, from: requestBody)
+        let decodedRequest = try JSONDecoder().decode(LinkChatRequest.self, from: requestBody)
 
         #expect(request.httpMethod == "POST")
         #expect(request.url?.path == "/api/chat")
         #expect(request.url?.port == 8787)
         #expect(request.value(forHTTPHeaderField: "Accept") == "application/json")
         #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
-        #expect(decodedRequest == CompanionChatRequest(message: "Hello"))
-        #expect(request.timeoutInterval == CompanionAPIClient.requestTimeout)
-        #expect(chat == CompanionChatResponse(
+        #expect(decodedRequest == LinkChatRequest(message: "Hello"))
+        #expect(request.timeoutInterval == SeleneLinkAPIClient.requestTimeout)
+        #expect(chat == LinkChatResponse(
             ok: true,
             reply: "Hello from Selene.",
             state: "idle",
@@ -81,7 +81,7 @@ struct CompanionAPITests {
         do {
             _ = try await client.sendChat(message: "")
             Issue.record("Expected a structured Companion API error.")
-        } catch let error as CompanionAPIError {
+        } catch let error as SeleneLinkAPIError {
             #expect(error == .server(
                 code: "INVALID_MESSAGE",
                 message: "Message must not be empty.",
@@ -100,7 +100,7 @@ struct CompanionAPITests {
         do {
             _ = try await client.fetchHealth()
             Issue.record("Expected a malformed response error.")
-        } catch let error as CompanionAPIError {
+        } catch let error as SeleneLinkAPIError {
             #expect(error == .malformedResponse)
         }
     }
@@ -121,7 +121,7 @@ struct CompanionAPITests {
         do {
             _ = try await client.fetchHealth()
             Issue.record("Expected an invalid response error.")
-        } catch let error as CompanionAPIError {
+        } catch let error as SeleneLinkAPIError {
             #expect(error == .invalidResponse)
         }
     }
@@ -139,9 +139,9 @@ struct CompanionAPITests {
             let url = try #require(components.url)
 
             do {
-                _ = try CompanionAPIClient(baseURL: url)
+                _ = try SeleneLinkAPIClient(baseURL: url)
                 Issue.record("Expected port \(port) to be rejected.")
-            } catch let error as CompanionAPIError {
+            } catch let error as SeleneLinkAPIError {
                 #expect(error == .invalidBaseURL)
             }
         }
@@ -149,13 +149,13 @@ struct CompanionAPITests {
 
     private func makeClient(
         handler: @escaping @Sendable (URLRequest) throws -> (URLResponse, Data)
-    ) throws -> (CompanionAPIClient, URLSession) {
+    ) throws -> (SeleneLinkAPIClient, URLSession) {
         URLProtocolStub.handler = handler
 
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [URLProtocolStub.self]
         let session = URLSession(configuration: configuration)
-        let client = try CompanionAPIClient(
+        let client = try SeleneLinkAPIClient(
             baseURL: AppConfiguration.development.companionBaseURL,
             session: session
         )
@@ -206,7 +206,7 @@ private final class URLProtocolStub: URLProtocol, @unchecked Sendable {
 
     override func startLoading() {
         guard let handler = Self.handler else {
-            client?.urlProtocol(self, didFailWithError: CompanionAPIError.invalidResponse)
+            client?.urlProtocol(self, didFailWithError: SeleneLinkAPIError.invalidResponse)
             return
         }
 
