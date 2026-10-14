@@ -25,14 +25,14 @@ Development priorities:
 | Component               | Purpose                                                      |
 | ----------------------- | ------------------------------------------------------------ |
 | Selene Core             | Assistant logic, models, memory, authority, and capabilities |
-| Companion API / Gateway | Controlled communication between Core and Homes              |
+| Selene Link             | Controlled communication between Core and Homes              |
 | Homes                   | Interfaces through which users interact with Selene          |
 | Constellation           | Connected devices, their roles, and coordination             |
 | Twelve Pillars          | Selene's modular capabilities                                |
 
 **Architecture principle:** Homes communicate with Selene through controlled interfaces rather than directly accessing privileged Core functionality.
 
-The name *Gateway* is proposed but has not yet replaced *Companion API* in the codebase.
+**Selene Link** is the approved name for this communication service. Existing `companion*` code identifiers and `SELENE_COMPANION_*` configuration variables are legacy compatibility names until a separately tested migration.
 
 ---
 
@@ -44,7 +44,6 @@ Homes are the interfaces where Selene lives.
 | ---------------- | ------------------ | --------------------------------------------- |
 | Windows Home     | Windows / Electron | Foundation built; further development planned |
 | iPhone Home      | iOS / SwiftUI      | Active development                            |
-| Web Companion    | Browser            | Foundation built; website development paused  |
 | Mac Home         | macOS              | Planned                                       |
 | Apple Watch Home | watchOS            | Future                                        |
 
@@ -56,7 +55,7 @@ Homes are the interfaces where Selene lives.
 4. Expand Pebble using the shared infrastructure.
 5. Develop additional native Homes as needed.
 
-The Web Companion website is optional and is not a prerequisite for beginning the Pillars. The Companion API remains essential infrastructure.
+The retired Web Companion browser frontend has been removed. Selene Link (the retained backend formerly called Companion API) remains essential infrastructure.
 
 ---
 
@@ -141,7 +140,7 @@ Production database location:
 
 `%LOCALAPPDATA%\Selene\data\conversations.sqlite3`
 
-Storage exists, but it is not yet integrated with the Companion API or iPhone Home.
+Storage exists, but it is not yet integrated with Selene Link or iPhone Home.
 
 ---
 
@@ -151,21 +150,21 @@ Storage exists, but it is not yet integrated with the Companion API or iPhone Ho
 * Explicit authority for privileged actions
 * Separate Home credentials from Core authority permissions
 * Independently revocable bearer credentials for each Home
-* Gateway capabilities: `chat`, `conversation:read`, and `conversation:write`
+* Selene Link capabilities: `chat`, `conversation:read`, and `conversation:write`
 * No direct exposure of privileged Core interfaces
 * Authentication before exposing private conversation history
 * Protected transport for credentials and private data
 * Device-specific access and revocation
 * No secrets committed to the repository
 
-The Gateway credential model and capabilities are approved. Transport,
+The Selene Link credential model and capabilities are approved. Transport,
 pairing, and iPhone credential storage remain pending design decisions.
 
 ---
 
 ## 8. Development Workflow
 
-**NOVA:** Primary development host, Core, and Companion services.
+**NOVA:** Primary development host, Core, and Selene Link services.
 
 **ORION:** Xcode development and Apple builds.
 
@@ -188,7 +187,7 @@ Do not treat unverified builds or tests as successful.
 
 **Conversation Access v1.0 — Security**
 
-Review the Companion API's authentication, LAN exposure, transport, credential storage, and compatibility with the existing iPhone connection check.
+Review Selene Link's authentication, LAN exposure, transport, credential storage, and compatibility with the existing iPhone connection check.
 
 The security audit is complete. The credential model and capabilities are
 approved; transport, pairing, and iPhone credential storage remain pending.
@@ -205,10 +204,10 @@ the remaining design decisions are approved.
 | NOVA hosts canonical conversation history         | Approved         |
 | SQLite for persistent conversations               | Implemented      |
 | Native Homes remain the primary interfaces        | Approved         |
-| Web Companion website development paused          | Approved         |
-| Companion API retained                            | Approved         |
+| Web Companion browser frontend retired            | Implemented         |
+| Companion API backend retained as Selene Link     | Approved         |
 | Constellation initially limited to Alex's devices | Approved         |
-| Per-Home Gateway bearer credentials and capabilities | Approved      |
+| Per-Home Selene Link bearer credentials and capabilities | Approved      |
 | Transport, pairing, and iPhone credential storage | Pending          |
 | Twelve Pillar definitions                         | To be documented |
 
