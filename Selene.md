@@ -34,7 +34,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the authoritative component definitio
 
 **Architecture principle:** Homes communicate with Selene through controlled interfaces rather than directly accessing privileged Core functionality.
 
-**Selene Link** is the approved name for this communication service. Existing `companion*` code identifiers and `SELENE_COMPANION_*` configuration variables are legacy compatibility names until a separately tested migration.
+**Selene Link** is the approved name for this communication service. Core Link API and iOS Link client identifiers have been migrated on the cleanup branch. Existing `gatewayCredential*` identifiers and `SELENE_COMPANION_*` configuration variables remain compatibility names until a separately tested migration.
 
 ---
 
