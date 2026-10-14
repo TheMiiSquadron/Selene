@@ -15,7 +15,7 @@ import {
 import { createConversationStore } from "./conversationStore.js";
 
 export const LINK_HOST = "127.0.0.1";
-export const COMPANION_LAN_HOST = "0.0.0.0";
+export const LINK_LAN_HOST = "0.0.0.0";
 export const LINK_PORT = 8787;
 export const LINK_MAX_BODY_BYTES = 32 * 1024;
 
@@ -25,9 +25,9 @@ const ALLOWED_ORIGINS = new Set([
   "http://127.0.0.1:8080",
 ]);
 
-export function resolveCompanionHost(env = process.env) {
+export function resolveLinkHost(env = process.env) {
   return env.SELENE_COMPANION_LAN === "1"
-    ? COMPANION_LAN_HOST
+    ? LINK_LAN_HOST
     : LINK_HOST;
 }
 
@@ -89,7 +89,7 @@ export function prepareLinkTransport(env = process.env) {
         "TLS paths require SELENE_COMPANION_HTTPS=1.",
       );
     }
-    return { host: resolveCompanionHost(env), tlsOptions: null };
+    return { host: resolveLinkHost(env), tlsOptions: null };
   }
 
   if (!certPath || !keyPath) {
@@ -106,11 +106,11 @@ export function prepareLinkTransport(env = process.env) {
       "TLS certificate or private key is invalid or mismatched.",
     );
   }
-  return { host: resolveCompanionHost(env), tlsOptions: { cert, key } };
+  return { host: resolveLinkHost(env), tlsOptions: { cert, key } };
 }
 
-function companionListeningMessage(host, port, scheme) {
-  if (host === COMPANION_LAN_HOST) {
+function linkListeningMessage(host, port, scheme) {
+  if (host === LINK_LAN_HOST) {
     return `Selene Link listening on ${scheme} port ${port} (LAN mode enabled).`;
   }
 
@@ -752,7 +752,7 @@ export function startLinkServer({
       const listeningPort = typeof address === "object" && address
         ? address.port
         : port;
-      onListening(companionListeningMessage(bindHost, listeningPort, scheme));
+      onListening(linkListeningMessage(bindHost, listeningPort, scheme));
       settle(server);
     });
   });

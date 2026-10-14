@@ -686,19 +686,19 @@ function createRuntimePairingComposition({ getCredentialIssuer = null } = {}) {
 export async function startSeleneServers({
   env = process.env,
   corePort = PORT,
-  companionPort,
+  linkPort,
   onCoreListening = console.log,
-  onCompanionListening = console.log,
-  onCompanionError = console.error,
+  onLinkListening = console.log,
+  onLinkError = console.error,
   credentialStore = null,
   pairingClaimService = null,
   pairingAdministration = createLocalPairingAdministration(),
 } = {}) {
   const linkServer = await startLinkServer({
-    port: companionPort,
+    port: linkPort,
     env,
-    onListening: onCompanionListening,
-    onError: onCompanionError,
+    onListening: onLinkListening,
+    onError: onLinkError,
     credentialStore,
     pairingClaimService,
   });

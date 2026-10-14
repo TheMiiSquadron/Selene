@@ -7,17 +7,17 @@ import { startLinkServer } from "./linkServer.js";
 async function main() {
   console.log("Selene Core v0.3.2");
   const linkServer = await startLinkServer();
-  let companionClosed = false;
+  let linkClosed = false;
 
   function closeLinkServer() {
     return new Promise((resolve) => {
-      if (!linkServer || companionClosed) {
+      if (!linkServer || linkClosed) {
         resolve();
         return;
       }
 
       linkServer.close(() => {
-        companionClosed = true;
+        linkClosed = true;
         resolve();
       });
     });

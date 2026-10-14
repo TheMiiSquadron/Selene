@@ -10,10 +10,10 @@ import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   LINK_HOST,
-  COMPANION_LAN_HOST,
+  LINK_LAN_HOST,
   LINK_PORT,
   createLinkServer as createLinkServerUnderTest,
-  resolveCompanionHost,
+  resolveLinkHost,
   startLinkServer,
   prepareLinkTransport,
   LinkTransportConfigurationError,
@@ -83,17 +83,17 @@ function close(server) {
   });
 }
 
-test("Companion host defaults safely unless LAN mode is exactly enabled", () => {
+test("Selene Link host defaults safely unless LAN mode is exactly enabled", () => {
   assert.equal(LINK_PORT, 8787);
-  assert.equal(resolveCompanionHost({}), LINK_HOST);
-  assert.equal(resolveCompanionHost({ SELENE_COMPANION_LAN: "" }), LINK_HOST);
-  assert.equal(resolveCompanionHost({ SELENE_COMPANION_LAN: "0" }), LINK_HOST);
-  assert.equal(resolveCompanionHost({ SELENE_COMPANION_LAN: "true" }), LINK_HOST);
-  assert.equal(resolveCompanionHost({ SELENE_COMPANION_LAN: " 1 " }), LINK_HOST);
-  assert.equal(resolveCompanionHost({ SELENE_COMPANION_LAN: "1" }), COMPANION_LAN_HOST);
+  assert.equal(resolveLinkHost({}), LINK_HOST);
+  assert.equal(resolveLinkHost({ SELENE_COMPANION_LAN: "" }), LINK_HOST);
+  assert.equal(resolveLinkHost({ SELENE_COMPANION_LAN: "0" }), LINK_HOST);
+  assert.equal(resolveLinkHost({ SELENE_COMPANION_LAN: "true" }), LINK_HOST);
+  assert.equal(resolveLinkHost({ SELENE_COMPANION_LAN: " 1 " }), LINK_HOST);
+  assert.equal(resolveLinkHost({ SELENE_COMPANION_LAN: "1" }), LINK_LAN_HOST);
 });
 
-test("Companion startup defaults to loopback and identifies loopback mode", async () => {
+test("Selene Link startup defaults to loopback and identifies loopback mode", async () => {
   const messages = [];
   const server = await startLinkServer({
     port: 0,
@@ -116,7 +116,7 @@ test("Companion startup defaults to loopback and identifies loopback mode", asyn
   }
 });
 
-test("Companion LAN flag binds all IPv4 interfaces and identifies LAN mode", async () => {
+test("Selene Link LAN flag binds all IPv4 interfaces and identifies LAN mode", async () => {
   const messages = [];
   const server = await startLinkServer({
     port: 0,
@@ -129,7 +129,7 @@ test("Companion LAN flag binds all IPv4 interfaces and identifies LAN mode", asy
 
   try {
     const address = server.address();
-    assert.equal(address.address, COMPANION_LAN_HOST);
+    assert.equal(address.address, LINK_LAN_HOST);
     assert.equal(address.port > 0, true);
     assert.deepEqual(messages, [
       `Selene Link listening on http port ${address.port} (LAN mode enabled).`,
@@ -139,7 +139,7 @@ test("Companion LAN flag binds all IPv4 interfaces and identifies LAN mode", asy
   }
 });
 
-test("Explicit Companion host overrides the LAN environment flag", async () => {
+test("Explicit Selene Link host overrides the LAN environment flag", async () => {
   const server = await startLinkServer({
     host: LINK_HOST,
     port: 0,
@@ -155,11 +155,11 @@ test("Explicit Companion host overrides the LAN environment flag", async () => {
   }
 });
 
-test("Companion health and chat endpoints work while bound for LAN access", async () => {
-  const server = createTestLinkServer({ host: COMPANION_LAN_HOST });
+test("Selene Link health and chat endpoints work while bound for LAN access", async () => {
+  const server = createTestLinkServer({ host: LINK_LAN_HOST });
   const port = await new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(0, COMPANION_LAN_HOST, () => {
+    server.listen(0, LINK_LAN_HOST, () => {
       const port = server.address().port;
       testTlsPorts.set(port, server.testCertificate);
       resolve(port);
@@ -180,7 +180,7 @@ test("Companion health and chat endpoints work while bound for LAN access", asyn
       },
     });
 
-    assert.equal(server.address().address, COMPANION_LAN_HOST);
+    assert.equal(server.address().address, LINK_LAN_HOST);
     assert.equal(health.statusCode, 200);
     assert.equal(JSON.parse(health.body).ok, true);
     assert.equal(chat.statusCode, 200);
@@ -252,7 +252,7 @@ function request({
   });
 }
 
-test("Companion health endpoint returns Selene Core status", async () => {
+test("Selene Link health endpoint returns Selene Core status", async () => {
   const server = createLinkServer();
   const port = await listen(server);
 
@@ -268,7 +268,7 @@ test("Companion health endpoint returns Selene Core status", async () => {
   }
 });
 
-test("Companion API allows only configured local development origins", async () => {
+test("Selene Link API allows only configured local development origins", async () => {
   const server = createLinkServer();
   const port = await listen(server);
 
@@ -300,7 +300,7 @@ test("Companion API allows only configured local development origins", async () 
   }
 });
 
-test("Companion API handles OPTIONS requests for allowed origins", async () => {
+test("Selene Link API handles OPTIONS requests for allowed origins", async () => {
   const server = createLinkServer();
   const port = await listen(server);
 
@@ -322,7 +322,7 @@ test("Companion API handles OPTIONS requests for allowed origins", async () => {
   }
 });
 
-test("Companion chat endpoint accepts a valid message", async () => {
+test("Selene Link chat endpoint accepts a valid message", async () => {
   const server = createTestLinkServer();
   const port = await listen(server);
 
@@ -353,7 +353,7 @@ test("Companion chat endpoint accepts a valid message", async () => {
   }
 });
 
-test("Companion chat remains disconnected from privileged command/model pipeline", async () => {
+test("Selene Link chat remains disconnected from privileged command/model pipeline", async () => {
   const calls = [];
   const server = createLinkServer({
     async chatHandler(input) {
@@ -396,7 +396,7 @@ test("Companion chat remains disconnected from privileged command/model pipeline
   }
 });
 
-test("Companion chat rejects a missing message", async () => {
+test("Selene Link chat rejects a missing message", async () => {
   const server = createLinkServer();
   const port = await listen(server);
 
@@ -420,7 +420,7 @@ test("Companion chat rejects a missing message", async () => {
   }
 });
 
-test("Companion chat rejects an empty message", async () => {
+test("Selene Link chat rejects an empty message", async () => {
   const server = createLinkServer();
   const port = await listen(server);
 
@@ -445,7 +445,7 @@ test("Companion chat rejects an empty message", async () => {
   }
 });
 
-test("Companion chat rejects a non-string message", async () => {
+test("Selene Link chat rejects a non-string message", async () => {
   const server = createLinkServer();
   const port = await listen(server);
 
@@ -470,7 +470,7 @@ test("Companion chat rejects a non-string message", async () => {
   }
 });
 
-test("Companion chat rejects malformed JSON", async () => {
+test("Selene Link chat rejects malformed JSON", async () => {
   const server = createLinkServer();
   const port = await listen(server);
 
@@ -493,7 +493,7 @@ test("Companion chat rejects malformed JSON", async () => {
   }
 });
 
-test("Companion chat rejects oversized messages", async () => {
+test("Selene Link chat rejects oversized messages", async () => {
   const server = createLinkServer();
   const port = await listen(server);
 
@@ -518,7 +518,7 @@ test("Companion chat rejects oversized messages", async () => {
   }
 });
 
-test("Companion chat rejects unsupported content type", async () => {
+test("Selene Link chat rejects unsupported content type", async () => {
   const server = createLinkServer();
   const port = await listen(server);
 
@@ -541,7 +541,7 @@ test("Companion chat rejects unsupported content type", async () => {
   }
 });
 
-test("Companion chat rejects unsupported methods", async () => {
+test("Selene Link chat rejects unsupported methods", async () => {
   const server = createLinkServer();
   const port = await listen(server);
 
@@ -560,7 +560,7 @@ test("Companion chat rejects unsupported methods", async () => {
   }
 });
 
-test("Companion chat CORS allows both local development origins only", async () => {
+test("Selene Link chat CORS allows both local development origins only", async () => {
   const server = createTestLinkServer();
   const port = await listen(server);
 
@@ -616,7 +616,7 @@ test("Companion chat CORS allows both local development origins only", async () 
   }
 });
 
-test("Companion chat sanitizes model failures", async () => {
+test("Selene Link chat sanitizes model failures", async () => {
   const server = createLinkServer({
     async chatHandler() {
       throw new Error("private model diagnostic");
@@ -652,7 +652,7 @@ test("Companion chat sanitizes model failures", async () => {
   }
 });
 
-test("Companion chat OPTIONS preflight supports JSON POST", async () => {
+test("Selene Link chat OPTIONS preflight supports JSON POST", async () => {
   const server = createLinkServer();
   const port = await listen(server);
 
@@ -680,7 +680,7 @@ test("Companion chat OPTIONS preflight supports JSON POST", async () => {
   }
 });
 
-test("Companion API reports port conflicts without throwing", async () => {
+test("Selene Link API reports port conflicts without throwing", async () => {
   const occupied = http.createServer((_req, res) => {
     res.end("occupied");
   });
@@ -988,7 +988,7 @@ test("HTTPS plus LAN retains the explicit all-interface bind switch", async () =
     onListening(message) { messages.push(message); },
   });
   try {
-    assert.equal(server.address().address, COMPANION_LAN_HOST);
+    assert.equal(server.address().address, LINK_LAN_HOST);
     assert.deepEqual(messages, [
       `Selene Link listening on https port ${server.address().port} (LAN mode enabled).`,
     ]);
@@ -997,7 +997,7 @@ test("HTTPS plus LAN retains the explicit all-interface bind switch", async () =
   }
 });
 
-test("combined startup keeps HTTPS Companion on LAN and privileged Core on loopback port 3030", async (t) => {
+test("combined startup keeps HTTPS Selene Link on LAN and privileged Core on loopback port 3030", async (t) => {
   const fixture = await tlsFixture();
   let listeners;
   try {
@@ -1008,9 +1008,9 @@ test("combined startup keeps HTTPS Companion on LAN and privileged Core on loopb
         SELENE_COMPANION_TLS_CERT_PATH: fixture.certPath,
         SELENE_COMPANION_TLS_KEY_PATH: fixture.keyPath,
       },
-      companionPort: 0,
+      linkPort: 0,
       onCoreListening() {},
-      onCompanionListening() {},
+      onLinkListening() {},
     });
   } catch (error) {
     if (error.code === "EADDRINUSE") {
@@ -1023,7 +1023,7 @@ test("combined startup keeps HTTPS Companion on LAN and privileged Core on loopb
   try {
     assert.equal(server.address().address, LINK_HOST);
     assert.equal(server.address().port, 3030);
-    assert.equal(linkServer.address().address, COMPANION_LAN_HOST);
+    assert.equal(linkServer.address().address, LINK_LAN_HOST);
     const health = await secureRequest({ port: linkServer.address().port, cert: fixture.cert });
     assert.equal(health.statusCode, 200);
     assert.equal(JSON.parse(health.body).ok, true);
