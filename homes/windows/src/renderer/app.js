@@ -10,6 +10,10 @@ const composerStatus = document.querySelector('#composer-status');
 const sendButton = document.querySelector('#send-button');
 const homeView = document.querySelector('#home-view');
 const settingsView = document.querySelector('#settings-view');
+const conversationView = document.querySelector('#conversation-view');
+const destinationView = document.querySelector('#destination-view');
+const destinationButtons = Array.from(document.querySelectorAll('[data-destination]'));
+const contextHeading = document.querySelector('#context-heading');
 const homeButton = document.querySelector('[data-action="home"]');
 const newChatButton = document.querySelector('[data-action="new-chat"]');
 const settingsButton = document.querySelector('[data-action="settings"]');
@@ -76,6 +80,11 @@ function showView(view, activeNavigation = homeButton) {
   const showSettings = view === 'settings';
   homeView.hidden = showSettings;
   settingsView.hidden = !showSettings;
+  conversationView.hidden = true;
+  destinationView.hidden = true;
+  const destination = showSettings ? 'settings' : 'home';
+  destinationButtons.forEach((button) => { button.classList.toggle('is-current', button.dataset.destination === destination); });
+  contextHeading.textContent = showSettings ? 'Settings' : 'Home';
   setCurrentNavigation(showSettings ? settingsButton : activeNavigation);
 }
 
@@ -100,6 +109,40 @@ function showUnavailable(feature) {
   composerStatus.textContent = getUnavailableMessage(feature);
   composerStatus.classList.add('is-visible');
 }
+
+function openDestination(destination) {
+  if (destination === 'home' || destination === 'settings') {
+    showView(destination);
+    return;
+  }
+  homeView.hidden = true;
+  settingsView.hidden = true;
+  conversationView.hidden = true;
+  destinationView.hidden = false;
+  const title = destination.charAt(0).toUpperCase() + destination.slice(1);
+  contextHeading.textContent = title;
+  document.querySelector('#destination-title').textContent = title;
+  document.querySelector('#destination-description').textContent =
+    destination === 'devices' ? 'Device connections will appear when Selene Core is connected.' :
+    destination === 'projects' ? 'Project navigation and content are not connected yet.' :
+    'Your files and generated artifacts will appear here when Library is connected.';
+  destinationButtons.forEach((button) => button.classList.toggle('is-current', button.dataset.destination === destination));
+  setCurrentNavigation(null);
+}
+
+destinationButtons.forEach((button) => button.addEventListener('click', () => openDestination(button.dataset.destination)));
+document.querySelector('[data-action="projects"]').addEventListener('click', () => openDestination('projects'));
+document.querySelector('[data-action="devices"]').addEventListener('click', () => openDestination('devices'));
+document.querySelector('#preview-conversation').addEventListener('click', () => {
+  homeView.hidden = true;
+  settingsView.hidden = true;
+  destinationView.hidden = true;
+  conversationView.hidden = false;
+  contextHeading.textContent = 'Home';
+  destinationButtons.forEach((button) => button.classList.toggle('is-current', button.dataset.destination === 'home'));
+});
+document.querySelector('#close-conversation').addEventListener('click', () => { showView('home'); composerInput.value = ''; syncComposerState(); composerInput.focus(); });
+document.querySelector('#return-to-home').addEventListener('click', () => { showView('home'); composerInput.focus(); });
 
 sidebarToggle.addEventListener('click', async () => {
   const previousValue = sidebar.dataset.collapsed === 'true';
