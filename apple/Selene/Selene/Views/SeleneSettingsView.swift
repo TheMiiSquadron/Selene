@@ -30,7 +30,7 @@ struct SeleneSettingsView: View {
                     NavigationLink(value: "connection") {
                         settingsRow(
                             title: "Connection",
-                            subtitle: "Companion and host status",
+                            subtitle: "Selene Link and host status",
                             systemImage: "wifi"
                         )
                     }
@@ -350,7 +350,7 @@ private struct SeleneConnectionView: View {
                 )
 
                 connectionRow(
-                    title: "Companion API",
+                    title: "Selene Link",
                     detail: connectionStatus,
                     systemImage: "network"
                 )

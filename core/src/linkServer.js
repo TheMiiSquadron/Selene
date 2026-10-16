@@ -5,19 +5,19 @@ import { readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  CompanionChatValidationError,
-  handleCompanionChat,
-} from "./companionChat.js";
+  LinkChatValidationError,
+  handleLinkChat,
+} from "./linkChat.js";
 import {
-  CompanionConversationValidationError,
-  createCompanionConversationService,
-} from "./companionConversations.js";
+  LinkConversationValidationError,
+  createLinkConversationService,
+} from "./linkConversations.js";
 import { createConversationStore } from "./conversationStore.js";
 
-export const COMPANION_HOST = "127.0.0.1";
-export const COMPANION_LAN_HOST = "0.0.0.0";
-export const COMPANION_PORT = 8787;
-export const COMPANION_MAX_BODY_BYTES = 32 * 1024;
+export const LINK_HOST = "127.0.0.1";
+export const LINK_LAN_HOST = "0.0.0.0";
+export const LINK_PORT = 8787;
+export const LINK_MAX_BODY_BYTES = 32 * 1024;
 
 const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const ALLOWED_ORIGINS = new Set([
@@ -25,16 +25,16 @@ const ALLOWED_ORIGINS = new Set([
   "http://127.0.0.1:8080",
 ]);
 
-export function resolveCompanionHost(env = process.env) {
+export function resolveLinkHost(env = process.env) {
   return env.SELENE_COMPANION_LAN === "1"
-    ? COMPANION_LAN_HOST
-    : COMPANION_HOST;
+    ? LINK_LAN_HOST
+    : LINK_HOST;
 }
 
-export class CompanionTransportConfigurationError extends Error {
+export class LinkTransportConfigurationError extends Error {
   constructor(message) {
     super(message);
-    this.name = "CompanionTransportConfigurationError";
+    this.name = "LinkTransportConfigurationError";
   }
 }
 
@@ -49,33 +49,33 @@ function isWithin(path, directory) {
 
 function readTlsFile(path, label) {
   if (typeof path !== "string" || !isAbsolute(path)) {
-    throw new CompanionTransportConfigurationError(`${label} must be an absolute path.`);
+    throw new LinkTransportConfigurationError(`${label} must be an absolute path.`);
   }
   if (isWithin(resolve(path), REPOSITORY_ROOT)) {
-    throw new CompanionTransportConfigurationError(`${label} must be outside the repository.`);
+    throw new LinkTransportConfigurationError(`${label} must be outside the repository.`);
   }
 
   let contents;
   try {
     const actualPath = realpathSync(path);
     if (isWithin(actualPath, realpathSync(REPOSITORY_ROOT))) {
-      throw new CompanionTransportConfigurationError(`${label} must be outside the repository.`);
+      throw new LinkTransportConfigurationError(`${label} must be outside the repository.`);
     }
     contents = readFileSync(actualPath);
   } catch (error) {
-    if (error instanceof CompanionTransportConfigurationError) throw error;
-    throw new CompanionTransportConfigurationError(`${label} is missing or unreadable.`);
+    if (error instanceof LinkTransportConfigurationError) throw error;
+    throw new LinkTransportConfigurationError(`${label} is missing or unreadable.`);
   }
   if (contents.length === 0) {
-    throw new CompanionTransportConfigurationError(`${label} must not be empty.`);
+    throw new LinkTransportConfigurationError(`${label} must not be empty.`);
   }
   return contents;
 }
 
-export function prepareCompanionTransport(env = process.env) {
+export function prepareLinkTransport(env = process.env) {
   const flag = env.SELENE_COMPANION_HTTPS;
   if (flag !== undefined && flag !== "" && flag !== "0" && flag !== "1") {
-    throw new CompanionTransportConfigurationError(
+    throw new LinkTransportConfigurationError(
       "SELENE_COMPANION_HTTPS must be 1, 0, or unset.",
     );
   }
@@ -85,15 +85,15 @@ export function prepareCompanionTransport(env = process.env) {
   const keyPath = env.SELENE_COMPANION_TLS_KEY_PATH;
   if (!enabled) {
     if (certPath !== undefined || keyPath !== undefined) {
-      throw new CompanionTransportConfigurationError(
+      throw new LinkTransportConfigurationError(
         "TLS paths require SELENE_COMPANION_HTTPS=1.",
       );
     }
-    return { host: resolveCompanionHost(env), tlsOptions: null };
+    return { host: resolveLinkHost(env), tlsOptions: null };
   }
 
   if (!certPath || !keyPath) {
-    throw new CompanionTransportConfigurationError(
+    throw new LinkTransportConfigurationError(
       "HTTPS requires both certificate and private-key paths.",
     );
   }
@@ -102,23 +102,23 @@ export function prepareCompanionTransport(env = process.env) {
   try {
     createSecureContext({ cert, key });
   } catch {
-    throw new CompanionTransportConfigurationError(
+    throw new LinkTransportConfigurationError(
       "TLS certificate or private key is invalid or mismatched.",
     );
   }
-  return { host: resolveCompanionHost(env), tlsOptions: { cert, key } };
+  return { host: resolveLinkHost(env), tlsOptions: { cert, key } };
 }
 
-function companionListeningMessage(host, port, scheme) {
-  if (host === COMPANION_LAN_HOST) {
-    return `Selene Companion API listening on ${scheme} port ${port} (LAN mode enabled).`;
+function linkListeningMessage(host, port, scheme) {
+  if (host === LINK_LAN_HOST) {
+    return `Selene Link listening on ${scheme} port ${port} (LAN mode enabled).`;
   }
 
-  if (host === COMPANION_HOST) {
-    return `Selene Companion API listening on ${scheme}://${host}:${port} (loopback only).`;
+  if (host === LINK_HOST) {
+    return `Selene Link listening on ${scheme}://${host}:${port} (loopback only).`;
   }
 
-  return `Selene Companion API listening on ${scheme}://${host}:${port} (custom bind).`;
+  return `Selene Link listening on ${scheme}://${host}:${port} (custom bind).`;
 }
 
 function corsHeaders(request) {
@@ -198,11 +198,11 @@ function authenticateRequest(request, response, credentialStore) {
   }
   try {
     if (typeof credentialStore?.authenticateCredential !== "function") {
-      throw new Error("Gateway credential store unavailable.");
+      throw new Error("Selene Link credential store unavailable.");
     }
     const identity = credentialStore.authenticateCredential(credential);
     if (!identity || !Array.isArray(identity.capabilities)) {
-      throw new Error("Invalid Gateway identity.");
+      throw new Error("Invalid Selene Link identity.");
     }
     return identity;
   } catch {
@@ -255,14 +255,14 @@ function readJsonBody(request) {
 
       body += chunk;
 
-      if (Buffer.byteLength(body, "utf-8") > COMPANION_MAX_BODY_BYTES) {
+      if (Buffer.byteLength(body, "utf-8") > LINK_MAX_BODY_BYTES) {
         tooLarge = true;
       }
     });
 
     request.on("end", () => {
       if (tooLarge) {
-        reject(new CompanionChatValidationError(
+        reject(new LinkChatValidationError(
           "REQUEST_TOO_LARGE",
           "Request body is too large.",
         ));
@@ -272,7 +272,7 @@ function readJsonBody(request) {
       try {
         resolve(JSON.parse(body || "{}"));
       } catch {
-        reject(new CompanionChatValidationError(
+        reject(new LinkChatValidationError(
           "MALFORMED_JSON",
           "Request body must be valid JSON.",
         ));
@@ -300,7 +300,7 @@ async function handleChat(request, response, chatHandler) {
   try {
     payload = await readJsonBody(request);
   } catch (error) {
-    if (error instanceof CompanionChatValidationError) {
+    if (error instanceof LinkChatValidationError) {
       sendError(request, response, 400, error.code, error.message);
       return;
     }
@@ -316,7 +316,7 @@ async function handleChat(request, response, chatHandler) {
 
     sendJson(request, response, 200, result);
   } catch (error) {
-    if (error instanceof CompanionChatValidationError) {
+    if (error instanceof LinkChatValidationError) {
       sendError(request, response, 400, error.code, error.message);
       return;
     }
@@ -326,7 +326,7 @@ async function handleChat(request, response, chatHandler) {
 }
 
 function sendConversationError(request, response, error) {
-  if (error instanceof CompanionConversationValidationError) {
+  if (error instanceof LinkConversationValidationError) {
     const statusCodes = {
       INVALID_REQUEST: 400,
       CONVERSATION_NOT_FOUND: 404,
@@ -374,7 +374,7 @@ async function handleCreateConversation(request, response, conversationService, 
 function assertAllowedQueryParameters(searchParams, allowed) {
   for (const key of searchParams.keys()) {
     if (!allowed.has(key)) {
-      throw new CompanionConversationValidationError(
+      throw new LinkConversationValidationError(
         "INVALID_REQUEST",
         "The request is invalid.",
       );
@@ -465,7 +465,7 @@ async function handlePairingClaim(request, response, pairingClaimService) {
   try {
     payload = await readJsonBody(request);
   } catch (error) {
-    if (error instanceof CompanionChatValidationError) {
+    if (error instanceof LinkChatValidationError) {
       sendNoStoreError(request, response, 400, "INVALID_REQUEST", "Invalid pairing claim request.");
       return;
     }
@@ -498,12 +498,12 @@ async function handlePairingClaim(request, response, pairingClaimService) {
   }
 }
 
-export function createCompanionServer({
-  host = COMPANION_HOST,
-  port = COMPANION_PORT,
+export function createLinkServer({
+  host = LINK_HOST,
+  port = LINK_PORT,
   machine = "NOVA",
   name = "Selene Core",
-  chatHandler = handleCompanionChat,
+  chatHandler = handleLinkChat,
   credentialStore = null,
   pairingClaimService = null,
   conversationService = null,
@@ -518,7 +518,7 @@ export function createCompanionServer({
     const store = conversationStore ?? (ownedConversationStore = createConversationStore({
       primaryOwnerId: credentialStore?.getPrimaryOwnerId?.(),
     }));
-    resolvedConversationService = createCompanionConversationService({
+    resolvedConversationService = createLinkConversationService({
       conversationStore: store,
     });
     return resolvedConversationService;
@@ -694,9 +694,9 @@ export function createCompanionServer({
   return server;
 }
 
-export function startCompanionServer({
+export function startLinkServer({
   host,
-  port = COMPANION_PORT,
+  port = LINK_PORT,
   env = process.env,
   onListening = console.log,
   onError = console.error,
@@ -705,14 +705,14 @@ export function startCompanionServer({
   transport,
 } = {}) {
   if (transport !== undefined) {
-    throw new CompanionTransportConfigurationError(
-      "Companion transport overrides are not supported; configure HTTPS through the environment.",
+    throw new LinkTransportConfigurationError(
+      "Selene Link transport overrides are not supported; configure HTTPS through the environment.",
     );
   }
-  const configuration = prepareCompanionTransport(env);
+  const configuration = prepareLinkTransport(env);
   const bindHost = host ?? configuration.host;
   const scheme = configuration.tlsOptions ? "https" : "http";
-  const server = createCompanionServer({
+  const server = createLinkServer({
     host: bindHost,
     port,
     tlsOptions: configuration.tlsOptions,
@@ -735,14 +735,14 @@ export function startCompanionServer({
     server.once("error", (error) => {
       if (error.code === "EADDRINUSE") {
         onError(
-          `Selene Companion API could not start on ${scheme}://${bindHost}:${port}: port is already in use.`,
+          `Selene Link could not start on ${scheme}://${bindHost}:${port}: port is already in use.`,
         );
         settle(null);
         return;
       }
 
       onError(
-        `Selene Companion API could not start on ${scheme}://${bindHost}:${port}: ${error.message}`,
+        `Selene Link could not start on ${scheme}://${bindHost}:${port}: ${error.message}`,
       );
       settle(null);
     });
@@ -752,7 +752,7 @@ export function startCompanionServer({
       const listeningPort = typeof address === "object" && address
         ? address.port
         : port;
-      onListening(companionListeningMessage(bindHost, listeningPort, scheme));
+      onListening(linkListeningMessage(bindHost, listeningPort, scheme));
       settle(server);
     });
   });

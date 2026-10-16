@@ -1,36 +1,36 @@
 import Foundation
 
-nonisolated struct CompanionHealthResponse: Codable, Equatable, Sendable {
+nonisolated struct LinkHealthResponse: Codable, Equatable, Sendable {
     let ok: Bool
     let name: String
     let machine: String
     let version: String
 }
 
-nonisolated struct CompanionChatRequest: Codable, Equatable, Sendable {
+nonisolated struct LinkChatRequest: Codable, Equatable, Sendable {
     let message: String
 }
 
-nonisolated struct CompanionEvent: Codable, Equatable, Sendable {}
+nonisolated struct LinkEvent: Codable, Equatable, Sendable {}
 
-nonisolated struct CompanionChatResponse: Codable, Equatable, Sendable {
+nonisolated struct LinkChatResponse: Codable, Equatable, Sendable {
     let ok: Bool
     let reply: String
     let state: String
-    let events: [CompanionEvent]
+    let events: [LinkEvent]
 }
 
-private nonisolated struct CompanionErrorEnvelope: Decodable, Sendable {
+private nonisolated struct LinkErrorEnvelope: Decodable, Sendable {
     let ok: Bool
-    let error: CompanionErrorPayload
+    let error: LinkErrorPayload
 }
 
-private nonisolated struct CompanionErrorPayload: Decodable, Sendable {
+private nonisolated struct LinkErrorPayload: Decodable, Sendable {
     let code: String
     let message: String
 }
 
-nonisolated enum CompanionAPIError: Error, Equatable, LocalizedError, Sendable {
+nonisolated enum SeleneLinkAPIError: Error, Equatable, LocalizedError, Sendable {
     case invalidBaseURL
     case invalidResponse
     case malformedResponse
@@ -40,25 +40,25 @@ nonisolated enum CompanionAPIError: Error, Equatable, LocalizedError, Sendable {
     var errorDescription: String? {
         switch self {
         case .invalidBaseURL:
-            "The Companion server address is invalid."
+            "The Selene Link address is invalid."
         case .invalidResponse:
-            "The Companion server returned an invalid response."
+            "Selene Link returned an invalid response."
         case .malformedResponse:
-            "The Companion server returned an unreadable response."
+            "Selene Link returned an unreadable response."
         case .httpStatus(let statusCode):
-            "The Companion request failed with HTTP status \(statusCode)."
+            "The Selene Link request failed with HTTP status \(statusCode)."
         case .server(_, let message, _):
             message
         }
     }
 }
 
-nonisolated protocol CompanionAPIProviding: Sendable {
-    func fetchHealth() async throws -> CompanionHealthResponse
-    func sendChat(message: String) async throws -> CompanionChatResponse
+nonisolated protocol SeleneLinkAPIProviding: Sendable {
+    func fetchHealth() async throws -> LinkHealthResponse
+    func sendChat(message: String) async throws -> LinkChatResponse
 }
 
-actor CompanionAPIClient {
+actor SeleneLinkAPIClient {
     static let allowedPort = 8787
     static let requestTimeout: TimeInterval = 120
 
@@ -79,33 +79,33 @@ actor CompanionAPIClient {
             baseURL.fragment == nil,
             baseURL.path.isEmpty || baseURL.path == "/"
         else {
-            throw CompanionAPIError.invalidBaseURL
+            throw SeleneLinkAPIError.invalidBaseURL
         }
 
         self.baseURL = baseURL
         self.session = session
     }
 
-    func fetchHealth() async throws -> CompanionHealthResponse {
+    func fetchHealth() async throws -> LinkHealthResponse {
         var request = request(path: "health")
         request.httpMethod = "GET"
 
-        let response: CompanionHealthResponse = try await perform(request)
+        let response: LinkHealthResponse = try await perform(request)
         guard response.ok else {
-            throw CompanionAPIError.malformedResponse
+            throw SeleneLinkAPIError.malformedResponse
         }
         return response
     }
 
-    func sendChat(message: String) async throws -> CompanionChatResponse {
+    func sendChat(message: String) async throws -> LinkChatResponse {
         var request = request(path: "api/chat")
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try encoder.encode(CompanionChatRequest(message: message))
+        request.httpBody = try encoder.encode(LinkChatRequest(message: message))
 
-        let response: CompanionChatResponse = try await perform(request)
+        let response: LinkChatResponse = try await perform(request)
         guard response.ok else {
-            throw CompanionAPIError.malformedResponse
+            throw SeleneLinkAPIError.malformedResponse
         }
         return response
     }
@@ -121,30 +121,30 @@ actor CompanionAPIClient {
         let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw CompanionAPIError.invalidResponse
+            throw SeleneLinkAPIError.invalidResponse
         }
 
         guard (200...299).contains(httpResponse.statusCode) else {
             if
-                let envelope = try? decoder.decode(CompanionErrorEnvelope.self, from: data),
+                let envelope = try? decoder.decode(LinkErrorEnvelope.self, from: data),
                 envelope.ok == false
             {
-                throw CompanionAPIError.server(
+                throw SeleneLinkAPIError.server(
                     code: envelope.error.code,
                     message: envelope.error.message,
                     statusCode: httpResponse.statusCode
                 )
             }
 
-            throw CompanionAPIError.httpStatus(httpResponse.statusCode)
+            throw SeleneLinkAPIError.httpStatus(httpResponse.statusCode)
         }
 
         do {
             return try decoder.decode(Response.self, from: data)
         } catch {
-            throw CompanionAPIError.malformedResponse
+            throw SeleneLinkAPIError.malformedResponse
         }
     }
 }
 
-extension CompanionAPIClient: CompanionAPIProviding {}
+extension SeleneLinkAPIClient: SeleneLinkAPIProviding {}

@@ -6,7 +6,7 @@ import { createPublicKey, generateKeyPairSync, randomBytes, sign } from "node:cr
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createCompanionServer } from "./companionServer.js";
+import { createLinkServer } from "./linkServer.js";
 import { createGatewayCredentialStore } from "./gatewayCredentialStore.js";
 
 // Disposable HTTPS material keeps test credentials off plaintext transport.
@@ -48,7 +48,7 @@ async function fixture(t, credentialStoreOverride) {
   const store = createGatewayCredentialStore({ databasePath: join(directory, "credentials.sqlite3") });
   const tlsOptions = testCertificate();
   let chatCalls = 0;
-  const server = createCompanionServer({
+  const server = createLinkServer({
     tlsOptions,
     credentialStore: credentialStoreOverride === undefined ? store : credentialStoreOverride,
     async chatHandler() {
@@ -176,7 +176,7 @@ test("missing credential store fails closed", async (t) => {
 
 test("plaintext chat is rejected before authentication or model invocation", async (t) => {
   let chatCalls = 0;
-  const server = createCompanionServer({
+  const server = createLinkServer({
     credentialStore: { authenticateCredential() { throw new Error("should not authenticate"); } },
     async chatHandler() { chatCalls += 1; return { reply: "unexpected" }; },
   });
@@ -204,7 +204,7 @@ test("plaintext chat is rejected before authentication or model invocation", asy
 test("forged forwarding header cannot turn plaintext chat into HTTPS", async (t) => {
   let authenticationCalls = 0;
   let chatCalls = 0;
-  const server = createCompanionServer({
+  const server = createLinkServer({
     credentialStore: {
       authenticateCredential() { authenticationCalls += 1; return { capabilities: ["chat"] }; },
     },

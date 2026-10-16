@@ -9,20 +9,20 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  COMPANION_HOST,
-  COMPANION_LAN_HOST,
-  COMPANION_PORT,
-  createCompanionServer as createCompanionServerUnderTest,
-  resolveCompanionHost,
-  startCompanionServer,
-  prepareCompanionTransport,
-  CompanionTransportConfigurationError,
-} from "./companionServer.js";
+  LINK_HOST,
+  LINK_LAN_HOST,
+  LINK_PORT,
+  createLinkServer as createLinkServerUnderTest,
+  resolveLinkHost,
+  startLinkServer,
+  prepareLinkTransport,
+  LinkTransportConfigurationError,
+} from "./linkServer.js";
 import {
-  COMPANION_CHAT_STATES,
-  handleCompanionChat,
-} from "./companionChat.js";
-import { CompanionConversationValidationError } from "./companionConversations.js";
+  LINK_CHAT_STATES,
+  handleLinkChat,
+} from "./linkChat.js";
+import { LinkConversationValidationError } from "./linkConversations.js";
 import { startSeleneServers } from "./server.js";
 
 const TEST_CHAT_REPLY = "A conversational reply.";
@@ -41,16 +41,16 @@ const testCredentialStore = {
   },
 };
 
-function createCompanionServer(options = {}) {
+function createLinkServer(options = {}) {
   const tlsOptions = options.tlsOptions ?? TEST_TLS;
-  const server = createCompanionServerUnderTest({
+  const server = createLinkServerUnderTest({
     credentialStore: testCredentialStore, tlsOptions, ...options,
   });
   server.testCertificate = tlsOptions.cert;
   return server;
 }
 
-function createTestCompanionServer(options = {}) {
+function createTestLinkServer(options = {}) {
   const modelService = {
     async createChatCompletion() {
       return {
@@ -59,16 +59,16 @@ function createTestCompanionServer(options = {}) {
     },
   };
 
-  return createCompanionServer({
+  return createLinkServer({
     ...options,
-    chatHandler: ({ message }) => handleCompanionChat({ message, modelService }),
+    chatHandler: ({ message }) => handleLinkChat({ message, modelService }),
   });
 }
 
 function listen(server) {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(0, COMPANION_HOST, () => {
+    server.listen(0, LINK_HOST, () => {
       const port = server.address().port;
       if (server.testCertificate) testTlsPorts.set(port, server.testCertificate);
       resolve(port);
@@ -83,19 +83,19 @@ function close(server) {
   });
 }
 
-test("Companion host defaults safely unless LAN mode is exactly enabled", () => {
-  assert.equal(COMPANION_PORT, 8787);
-  assert.equal(resolveCompanionHost({}), COMPANION_HOST);
-  assert.equal(resolveCompanionHost({ SELENE_COMPANION_LAN: "" }), COMPANION_HOST);
-  assert.equal(resolveCompanionHost({ SELENE_COMPANION_LAN: "0" }), COMPANION_HOST);
-  assert.equal(resolveCompanionHost({ SELENE_COMPANION_LAN: "true" }), COMPANION_HOST);
-  assert.equal(resolveCompanionHost({ SELENE_COMPANION_LAN: " 1 " }), COMPANION_HOST);
-  assert.equal(resolveCompanionHost({ SELENE_COMPANION_LAN: "1" }), COMPANION_LAN_HOST);
+test("Selene Link host defaults safely unless LAN mode is exactly enabled", () => {
+  assert.equal(LINK_PORT, 8787);
+  assert.equal(resolveLinkHost({}), LINK_HOST);
+  assert.equal(resolveLinkHost({ SELENE_COMPANION_LAN: "" }), LINK_HOST);
+  assert.equal(resolveLinkHost({ SELENE_COMPANION_LAN: "0" }), LINK_HOST);
+  assert.equal(resolveLinkHost({ SELENE_COMPANION_LAN: "true" }), LINK_HOST);
+  assert.equal(resolveLinkHost({ SELENE_COMPANION_LAN: " 1 " }), LINK_HOST);
+  assert.equal(resolveLinkHost({ SELENE_COMPANION_LAN: "1" }), LINK_LAN_HOST);
 });
 
-test("Companion startup defaults to loopback and identifies loopback mode", async () => {
+test("Selene Link startup defaults to loopback and identifies loopback mode", async () => {
   const messages = [];
-  const server = await startCompanionServer({
+  const server = await startLinkServer({
     port: 0,
     env: {},
     onListening(message) {
@@ -106,19 +106,19 @@ test("Companion startup defaults to loopback and identifies loopback mode", asyn
 
   try {
     const address = server.address();
-    assert.equal(address.address, COMPANION_HOST);
+    assert.equal(address.address, LINK_HOST);
     assert.equal(address.port > 0, true);
     assert.deepEqual(messages, [
-      `Selene Companion API listening on http://${COMPANION_HOST}:${address.port} (loopback only).`,
+      `Selene Link listening on http://${LINK_HOST}:${address.port} (loopback only).`,
     ]);
   } finally {
     await close(server);
   }
 });
 
-test("Companion LAN flag binds all IPv4 interfaces and identifies LAN mode", async () => {
+test("Selene Link LAN flag binds all IPv4 interfaces and identifies LAN mode", async () => {
   const messages = [];
-  const server = await startCompanionServer({
+  const server = await startLinkServer({
     port: 0,
     env: { SELENE_COMPANION_LAN: "1" },
     onListening(message) {
@@ -129,19 +129,19 @@ test("Companion LAN flag binds all IPv4 interfaces and identifies LAN mode", asy
 
   try {
     const address = server.address();
-    assert.equal(address.address, COMPANION_LAN_HOST);
+    assert.equal(address.address, LINK_LAN_HOST);
     assert.equal(address.port > 0, true);
     assert.deepEqual(messages, [
-      `Selene Companion API listening on http port ${address.port} (LAN mode enabled).`,
+      `Selene Link listening on http port ${address.port} (LAN mode enabled).`,
     ]);
   } finally {
     await close(server);
   }
 });
 
-test("Explicit Companion host overrides the LAN environment flag", async () => {
-  const server = await startCompanionServer({
-    host: COMPANION_HOST,
+test("Explicit Selene Link host overrides the LAN environment flag", async () => {
+  const server = await startLinkServer({
+    host: LINK_HOST,
     port: 0,
     env: { SELENE_COMPANION_LAN: "1" },
     onListening() {},
@@ -149,17 +149,17 @@ test("Explicit Companion host overrides the LAN environment flag", async () => {
   });
 
   try {
-    assert.equal(server.address().address, COMPANION_HOST);
+    assert.equal(server.address().address, LINK_HOST);
   } finally {
     await close(server);
   }
 });
 
-test("Companion health and chat endpoints work while bound for LAN access", async () => {
-  const server = createTestCompanionServer({ host: COMPANION_LAN_HOST });
+test("Selene Link health and chat endpoints work while bound for LAN access", async () => {
+  const server = createTestLinkServer({ host: LINK_LAN_HOST });
   const port = await new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(0, COMPANION_LAN_HOST, () => {
+    server.listen(0, LINK_LAN_HOST, () => {
       const port = server.address().port;
       testTlsPorts.set(port, server.testCertificate);
       resolve(port);
@@ -180,7 +180,7 @@ test("Companion health and chat endpoints work while bound for LAN access", asyn
       },
     });
 
-    assert.equal(server.address().address, COMPANION_LAN_HOST);
+    assert.equal(server.address().address, LINK_LAN_HOST);
     assert.equal(health.statusCode, 200);
     assert.equal(JSON.parse(health.body).ok, true);
     assert.equal(chat.statusCode, 200);
@@ -222,7 +222,7 @@ function request({
 
     const transport = testTlsPorts.has(port) ? https : http;
     const req = transport.request({
-      host: COMPANION_HOST,
+      host: LINK_HOST,
       ...(testTlsPorts.has(port)
         ? { servername: "localhost", ca: testTlsPorts.get(port) } : {}),
       port,
@@ -252,8 +252,8 @@ function request({
   });
 }
 
-test("Companion health endpoint returns Selene Core status", async () => {
-  const server = createCompanionServer();
+test("Selene Link health endpoint returns Selene Core status", async () => {
+  const server = createLinkServer();
   const port = await listen(server);
 
   try {
@@ -268,8 +268,8 @@ test("Companion health endpoint returns Selene Core status", async () => {
   }
 });
 
-test("Companion API allows only configured local development origins", async () => {
-  const server = createCompanionServer();
+test("Selene Link API allows only configured local development origins", async () => {
+  const server = createLinkServer();
   const port = await listen(server);
 
   try {
@@ -300,8 +300,8 @@ test("Companion API allows only configured local development origins", async () 
   }
 });
 
-test("Companion API handles OPTIONS requests for allowed origins", async () => {
-  const server = createCompanionServer();
+test("Selene Link API handles OPTIONS requests for allowed origins", async () => {
+  const server = createLinkServer();
   const port = await listen(server);
 
   try {
@@ -322,8 +322,8 @@ test("Companion API handles OPTIONS requests for allowed origins", async () => {
   }
 });
 
-test("Companion chat endpoint accepts a valid message", async () => {
-  const server = createTestCompanionServer();
+test("Selene Link chat endpoint accepts a valid message", async () => {
+  const server = createTestLinkServer();
   const port = await listen(server);
 
   try {
@@ -344,7 +344,7 @@ test("Companion chat endpoint accepts a valid message", async () => {
     assert.equal(body.ok, true);
     assert.equal(typeof body.reply, "string");
     assert.equal(body.reply, TEST_CHAT_REPLY);
-    assert.equal(COMPANION_CHAT_STATES.has(body.state), true);
+    assert.equal(LINK_CHAT_STATES.has(body.state), true);
     assert.equal(body.state, "idle");
     assert.equal(Array.isArray(body.events), true);
     assert.deepEqual(body.events, []);
@@ -353,9 +353,9 @@ test("Companion chat endpoint accepts a valid message", async () => {
   }
 });
 
-test("Companion chat remains disconnected from privileged command/model pipeline", async () => {
+test("Selene Link chat remains disconnected from privileged command/model pipeline", async () => {
   const calls = [];
-  const server = createCompanionServer({
+  const server = createLinkServer({
     async chatHandler(input) {
       calls.push(input);
       return {
@@ -396,8 +396,8 @@ test("Companion chat remains disconnected from privileged command/model pipeline
   }
 });
 
-test("Companion chat rejects a missing message", async () => {
-  const server = createCompanionServer();
+test("Selene Link chat rejects a missing message", async () => {
+  const server = createLinkServer();
   const port = await listen(server);
 
   try {
@@ -420,8 +420,8 @@ test("Companion chat rejects a missing message", async () => {
   }
 });
 
-test("Companion chat rejects an empty message", async () => {
-  const server = createCompanionServer();
+test("Selene Link chat rejects an empty message", async () => {
+  const server = createLinkServer();
   const port = await listen(server);
 
   try {
@@ -445,8 +445,8 @@ test("Companion chat rejects an empty message", async () => {
   }
 });
 
-test("Companion chat rejects a non-string message", async () => {
-  const server = createCompanionServer();
+test("Selene Link chat rejects a non-string message", async () => {
+  const server = createLinkServer();
   const port = await listen(server);
 
   try {
@@ -470,8 +470,8 @@ test("Companion chat rejects a non-string message", async () => {
   }
 });
 
-test("Companion chat rejects malformed JSON", async () => {
-  const server = createCompanionServer();
+test("Selene Link chat rejects malformed JSON", async () => {
+  const server = createLinkServer();
   const port = await listen(server);
 
   try {
@@ -493,8 +493,8 @@ test("Companion chat rejects malformed JSON", async () => {
   }
 });
 
-test("Companion chat rejects oversized messages", async () => {
-  const server = createCompanionServer();
+test("Selene Link chat rejects oversized messages", async () => {
+  const server = createLinkServer();
   const port = await listen(server);
 
   try {
@@ -518,8 +518,8 @@ test("Companion chat rejects oversized messages", async () => {
   }
 });
 
-test("Companion chat rejects unsupported content type", async () => {
-  const server = createCompanionServer();
+test("Selene Link chat rejects unsupported content type", async () => {
+  const server = createLinkServer();
   const port = await listen(server);
 
   try {
@@ -541,8 +541,8 @@ test("Companion chat rejects unsupported content type", async () => {
   }
 });
 
-test("Companion chat rejects unsupported methods", async () => {
-  const server = createCompanionServer();
+test("Selene Link chat rejects unsupported methods", async () => {
+  const server = createLinkServer();
   const port = await listen(server);
 
   try {
@@ -560,8 +560,8 @@ test("Companion chat rejects unsupported methods", async () => {
   }
 });
 
-test("Companion chat CORS allows both local development origins only", async () => {
-  const server = createTestCompanionServer();
+test("Selene Link chat CORS allows both local development origins only", async () => {
+  const server = createTestLinkServer();
   const port = await listen(server);
 
   try {
@@ -616,8 +616,8 @@ test("Companion chat CORS allows both local development origins only", async () 
   }
 });
 
-test("Companion chat sanitizes model failures", async () => {
-  const server = createCompanionServer({
+test("Selene Link chat sanitizes model failures", async () => {
+  const server = createLinkServer({
     async chatHandler() {
       throw new Error("private model diagnostic");
     },
@@ -652,8 +652,8 @@ test("Companion chat sanitizes model failures", async () => {
   }
 });
 
-test("Companion chat OPTIONS preflight supports JSON POST", async () => {
-  const server = createCompanionServer();
+test("Selene Link chat OPTIONS preflight supports JSON POST", async () => {
+  const server = createLinkServer();
   const port = await listen(server);
 
   try {
@@ -680,7 +680,7 @@ test("Companion chat OPTIONS preflight supports JSON POST", async () => {
   }
 });
 
-test("Companion API reports port conflicts without throwing", async () => {
+test("Selene Link API reports port conflicts without throwing", async () => {
   const occupied = http.createServer((_req, res) => {
     res.end("occupied");
   });
@@ -688,8 +688,8 @@ test("Companion API reports port conflicts without throwing", async () => {
   const errors = [];
 
   try {
-    const server = await startCompanionServer({
-      host: COMPANION_HOST,
+    const server = await startLinkServer({
+      host: LINK_HOST,
       port,
       onListening() {},
       onError(message) {
@@ -792,7 +792,7 @@ function secureRequest({ port, cert, method = "GET", path = "/health", body, ori
       }),
     };
     const req = https.request({
-      host: COMPANION_HOST,
+      host: LINK_HOST,
       port,
       method,
       path,
@@ -816,21 +816,21 @@ function secureRequest({ port, cert, method = "GET", path = "/health", body, ori
 
 test("HTTPS flag has strict values and rejects TLS paths in HTTP mode", () => {
   for (const flag of [undefined, "", "0"]) {
-    assert.deepEqual(prepareCompanionTransport({ SELENE_COMPANION_HTTPS: flag }), {
-      host: COMPANION_HOST,
+    assert.deepEqual(prepareLinkTransport({ SELENE_COMPANION_HTTPS: flag }), {
+      host: LINK_HOST,
       tlsOptions: null,
     });
   }
   for (const flag of ["true", " 1 ", "2", "false"]) {
     assert.throws(
-      () => prepareCompanionTransport({ SELENE_COMPANION_HTTPS: flag }),
-      CompanionTransportConfigurationError,
+      () => prepareLinkTransport({ SELENE_COMPANION_HTTPS: flag }),
+      LinkTransportConfigurationError,
     );
   }
   for (const name of ["SELENE_COMPANION_TLS_CERT_PATH", "SELENE_COMPANION_TLS_KEY_PATH"]) {
     assert.throws(
-      () => prepareCompanionTransport({ [name]: "unused.pem" }),
-      CompanionTransportConfigurationError,
+      () => prepareLinkTransport({ [name]: "unused.pem" }),
+      LinkTransportConfigurationError,
     );
   }
 });
@@ -844,9 +844,9 @@ test("HTTPS requires both absolute TLS paths outside the repository", async () =
     { ...base, SELENE_COMPANION_TLS_KEY_PATH: fixture.keyPath },
     { ...base, SELENE_COMPANION_TLS_CERT_PATH: "relative.pem", SELENE_COMPANION_TLS_KEY_PATH: fixture.keyPath },
     { ...base, SELENE_COMPANION_TLS_CERT_PATH: fixture.certPath, SELENE_COMPANION_TLS_KEY_PATH: "relative.pem" },
-    { ...base, SELENE_COMPANION_TLS_CERT_PATH: resolve("src/companionServer.js"), SELENE_COMPANION_TLS_KEY_PATH: fixture.keyPath },
+    { ...base, SELENE_COMPANION_TLS_CERT_PATH: resolve("src/linkServer.js"), SELENE_COMPANION_TLS_KEY_PATH: fixture.keyPath },
   ]) {
-    assert.throws(() => prepareCompanionTransport(env), CompanionTransportConfigurationError);
+    assert.throws(() => prepareLinkTransport(env), LinkTransportConfigurationError);
   }
 });
 
@@ -854,7 +854,7 @@ test("HTTPS rejects a TLS path traversing into the repository", async () => {
   const fixture = await tlsFixture();
   const traversingPath = `${REPOSITORY_ROOT}${sep}core${sep}..${sep}core${sep}package.json`;
   assert.match(traversingPath, /\.\./);
-  assert.throws(() => prepareCompanionTransport({
+  assert.throws(() => prepareLinkTransport({
     SELENE_COMPANION_HTTPS: "1",
     SELENE_COMPANION_TLS_CERT_PATH: traversingPath,
     SELENE_COMPANION_TLS_KEY_PATH: fixture.keyPath,
@@ -872,7 +872,7 @@ test("HTTPS rejects case-varied repository paths on case-insensitive Windows", a
     return;
   }
   const fixture = await tlsFixture();
-  assert.throws(() => prepareCompanionTransport({
+  assert.throws(() => prepareLinkTransport({
     SELENE_COMPANION_HTTPS: "1",
     SELENE_COMPANION_TLS_CERT_PATH: caseVariedPath,
     SELENE_COMPANION_TLS_KEY_PATH: fixture.keyPath,
@@ -891,7 +891,7 @@ test("HTTPS rejects a symlink or junction resolving into the repository", async 
     }
     throw error;
   }
-  assert.throws(() => prepareCompanionTransport({
+  assert.throws(() => prepareLinkTransport({
     SELENE_COMPANION_HTTPS: "1",
     SELENE_COMPANION_TLS_CERT_PATH: join(linkPath, "core", "package.json"),
     SELENE_COMPANION_TLS_KEY_PATH: fixture.keyPath,
@@ -920,16 +920,16 @@ test("HTTPS rejects missing, unreadable, empty, malformed, and mismatched materi
     { SELENE_COMPANION_TLS_KEY_PATH: malformedPath },
     { SELENE_COMPANION_TLS_KEY_PATH: other.keyPath },
   ]) {
-    assert.throws(() => prepareCompanionTransport({ ...env, ...override }),
-      CompanionTransportConfigurationError);
+    assert.throws(() => prepareLinkTransport({ ...env, ...override }),
+      LinkTransportConfigurationError);
   }
-  assert.equal(prepareCompanionTransport(env).tlsOptions.cert.toString(), fixture.cert);
+  assert.equal(prepareLinkTransport(env).tlsOptions.cert.toString(), fixture.cert);
 });
 
 test("HTTPS and HTTP share route behavior, with no HTTP fallback", async () => {
   const fixture = await tlsFixture();
   const messages = [];
-  const server = await startCompanionServer({
+  const server = await startLinkServer({
     port: 0,
     credentialStore: testCredentialStore,
     env: {
@@ -941,9 +941,9 @@ test("HTTPS and HTTP share route behavior, with no HTTP fallback", async () => {
   });
   try {
     const port = server.address().port;
-    assert.equal(server.address().address, COMPANION_HOST);
+    assert.equal(server.address().address, LINK_HOST);
     assert.deepEqual(messages, [
-      `Selene Companion API listening on https://${COMPANION_HOST}:${port} (loopback only).`,
+      `Selene Link listening on https://${LINK_HOST}:${port} (loopback only).`,
     ]);
     const health = await secureRequest({ port, cert: fixture.cert });
     assert.equal(health.statusCode, 200);
@@ -965,7 +965,7 @@ test("HTTPS and HTTP share route behavior, with no HTTP fallback", async () => {
     const privilegedRoute = await secureRequest({ port, cert: fixture.cert, path: "/authority" });
     assert.equal(privilegedRoute.statusCode, 404);
     await assert.rejects(new Promise((resolveRequest, rejectRequest) => {
-      const req = https.get({ host: COMPANION_HOST, port, path: "/health" }, resolveRequest);
+      const req = https.get({ host: LINK_HOST, port, path: "/health" }, resolveRequest);
       req.on("error", rejectRequest);
     }), /self-signed|certificate/i);
     await assert.rejects(request({ port }), /socket hang up|reset|EPROTO/i);
@@ -977,7 +977,7 @@ test("HTTPS and HTTP share route behavior, with no HTTP fallback", async () => {
 test("HTTPS plus LAN retains the explicit all-interface bind switch", async () => {
   const fixture = await tlsFixture();
   const messages = [];
-  const server = await startCompanionServer({
+  const server = await startLinkServer({
     port: 0,
     env: {
       SELENE_COMPANION_HTTPS: "1",
@@ -988,16 +988,16 @@ test("HTTPS plus LAN retains the explicit all-interface bind switch", async () =
     onListening(message) { messages.push(message); },
   });
   try {
-    assert.equal(server.address().address, COMPANION_LAN_HOST);
+    assert.equal(server.address().address, LINK_LAN_HOST);
     assert.deepEqual(messages, [
-      `Selene Companion API listening on https port ${server.address().port} (LAN mode enabled).`,
+      `Selene Link listening on https port ${server.address().port} (LAN mode enabled).`,
     ]);
   } finally {
     await close(server);
   }
 });
 
-test("combined startup keeps HTTPS Companion on LAN and privileged Core on loopback port 3030", async (t) => {
+test("combined startup keeps HTTPS Selene Link on LAN and privileged Core on loopback port 3030", async (t) => {
   const fixture = await tlsFixture();
   let listeners;
   try {
@@ -1008,9 +1008,9 @@ test("combined startup keeps HTTPS Companion on LAN and privileged Core on loopb
         SELENE_COMPANION_TLS_CERT_PATH: fixture.certPath,
         SELENE_COMPANION_TLS_KEY_PATH: fixture.keyPath,
       },
-      companionPort: 0,
+      linkPort: 0,
       onCoreListening() {},
-      onCompanionListening() {},
+      onLinkListening() {},
     });
   } catch (error) {
     if (error.code === "EADDRINUSE") {
@@ -1019,28 +1019,28 @@ test("combined startup keeps HTTPS Companion on LAN and privileged Core on loopb
     }
     throw error;
   }
-  const { server, companionServer } = listeners;
+  const { server, linkServer } = listeners;
   try {
-    assert.equal(server.address().address, COMPANION_HOST);
+    assert.equal(server.address().address, LINK_HOST);
     assert.equal(server.address().port, 3030);
-    assert.equal(companionServer.address().address, COMPANION_LAN_HOST);
-    const health = await secureRequest({ port: companionServer.address().port, cert: fixture.cert });
+    assert.equal(linkServer.address().address, LINK_LAN_HOST);
+    const health = await secureRequest({ port: linkServer.address().port, cert: fixture.cert });
     assert.equal(health.statusCode, 200);
     assert.equal(JSON.parse(health.body).ok, true);
   } finally {
-    await close(companionServer);
+    await close(linkServer);
     await close(server);
   }
 });
 
 test("HTTPS preserves successful chat, CORS rejection, and sanitized model errors", async () => {
   const fixture = await tlsFixture();
-  const tlsOptions = prepareCompanionTransport({
+  const tlsOptions = prepareLinkTransport({
     SELENE_COMPANION_HTTPS: "1",
     SELENE_COMPANION_TLS_CERT_PATH: fixture.certPath,
     SELENE_COMPANION_TLS_KEY_PATH: fixture.keyPath,
   }).tlsOptions;
-  const server = createTestCompanionServer({ tlsOptions });
+  const server = createTestLinkServer({ tlsOptions });
   const port = await listen(server);
   try {
     const chat = await secureRequest({
@@ -1054,7 +1054,7 @@ test("HTTPS preserves successful chat, CORS rejection, and sanitized model error
     await close(server);
   }
 
-  const failingServer = createCompanionServer({
+  const failingServer = createLinkServer({
     tlsOptions,
     async chatHandler() { throw new Error("private model diagnostic"); },
   });
@@ -1076,7 +1076,7 @@ test("invalid HTTPS startup never opens a plaintext listener", async () => {
   const occupied = http.createServer((_request, response) => response.end("still HTTP"));
   const occupiedPort = await listen(occupied);
   try {
-    assert.throws(() => startCompanionServer({
+    assert.throws(() => startLinkServer({
       port: occupiedPort,
       env: {
         SELENE_COMPANION_HTTPS: "1",
@@ -1084,7 +1084,7 @@ test("invalid HTTPS startup never opens a plaintext listener", async () => {
         SELENE_COMPANION_TLS_KEY_PATH: join(tmpdir(), "missing-selene-key.pem"),
       },
       onError() {},
-    }), CompanionTransportConfigurationError);
+    }), LinkTransportConfigurationError);
     const result = await request({ port: occupiedPort });
     assert.equal(result.body, "still HTTP");
   } finally {
@@ -1098,16 +1098,16 @@ test("a supplied HTTP transport cannot override explicit HTTPS configuration", a
   const port = await listen(reservation);
   await close(reservation);
   const messages = [];
-  assert.throws(() => startCompanionServer({
+  assert.throws(() => startLinkServer({
     port,
     env: {
       SELENE_COMPANION_HTTPS: "1",
       SELENE_COMPANION_TLS_CERT_PATH: fixture.certPath,
       SELENE_COMPANION_TLS_KEY_PATH: fixture.keyPath,
     },
-    transport: { host: COMPANION_HOST, tlsOptions: null },
+    transport: { host: LINK_HOST, tlsOptions: null },
     onListening(message) { messages.push(message); },
-  }), CompanionTransportConfigurationError);
+  }), LinkTransportConfigurationError);
   assert.deepEqual(messages, []);
   await assert.rejects(request({ port }), { code: "ECONNREFUSED" });
 });
@@ -1135,7 +1135,7 @@ test("Conversation API creates, lists, and retrieves through the Gateway boundar
       return { ok: true, conversation, messages: [] };
     },
   };
-  const server = createCompanionServer({ conversationService });
+  const server = createLinkServer({ conversationService });
   const port = await listen(server);
   const authorization = { Authorization: `Bearer ${TEST_BEARER}` };
 
@@ -1183,7 +1183,7 @@ test("Conversation Gateway propagates distinct authenticated owners without clie
     },
     getConversation(ownerId, id) {
       calls.push(["get", ownerId, id]);
-      throw new CompanionConversationValidationError(
+      throw new LinkConversationValidationError(
         "CONVERSATION_NOT_FOUND",
         "Conversation not found.",
       );
@@ -1201,7 +1201,7 @@ test("Conversation Gateway propagates distinct authenticated owners without clie
       };
     },
   };
-  const server = createCompanionServer({ conversationService, credentialStore });
+  const server = createLinkServer({ conversationService, credentialStore });
   const port = await listen(server);
   const id = "00000000-0000-4000-8000-000000000001";
 
@@ -1253,7 +1253,7 @@ test("Conversation API requires HTTPS and authentication", async () => {
       return { ok: true, conversations: [], hasMore: false };
     },
   };
-  const plaintext = createCompanionServerUnderTest({
+  const plaintext = createLinkServerUnderTest({
     credentialStore: testCredentialStore,
     conversationService,
   });
@@ -1270,7 +1270,7 @@ test("Conversation API requires HTTPS and authentication", async () => {
     await close(plaintext);
   }
 
-  const secure = createCompanionServer({ conversationService });
+  const secure = createLinkServer({ conversationService });
   const securePort = await listen(secure);
   try {
     const response = await request({
@@ -1287,19 +1287,19 @@ test("Conversation API requires HTTPS and authentication", async () => {
 test("Conversation API preserves sanitized validation and not-found errors", async () => {
   const conversationService = {
     createConversation() {
-      throw new CompanionConversationValidationError(
+      throw new LinkConversationValidationError(
         "INVALID_REQUEST",
         "The request is invalid.",
       );
     },
     getConversation() {
-      throw new CompanionConversationValidationError(
+      throw new LinkConversationValidationError(
         "CONVERSATION_NOT_FOUND",
         "Conversation not found.",
       );
     },
   };
-  const server = createCompanionServer({ conversationService });
+  const server = createLinkServer({ conversationService });
   const port = await listen(server);
   const authorization = { Authorization: `Bearer ${TEST_BEARER}` };
 
@@ -1354,7 +1354,7 @@ test("Conversation API enforces read and write capabilities before service acces
       return { ownerId: TEST_OWNER_ID, capabilities };
     },
   };
-  const server = createCompanionServer({ conversationService, credentialStore });
+  const server = createLinkServer({ conversationService, credentialStore });
   const port = await listen(server);
 
   async function authorizedRequest(credential, options = {}) {
@@ -1433,7 +1433,7 @@ test("Persistent message route requires both write and chat capabilities", async
       throw new Error("Invalid credential.");
     },
   };
-  const server = createCompanionServer({ conversationService, credentialStore });
+  const server = createLinkServer({ conversationService, credentialStore });
   const port = await listen(server);
   const conversationId = "00000000-0000-4000-8000-000000000001";
   const path = `/api/conversations/${conversationId}/messages`;
@@ -1484,10 +1484,10 @@ test("Persistent message route maps turn failures to stable sanitized errors", a
   for (const [code, statusCode] of cases) {
     const conversationService = {
       async sendMessage() {
-        throw new CompanionConversationValidationError(code, "safe message");
+        throw new LinkConversationValidationError(code, "safe message");
       },
     };
-    const server = createCompanionServer({ conversationService });
+    const server = createLinkServer({ conversationService });
     const port = await listen(server);
     try {
       const result = await request({
@@ -1507,7 +1507,7 @@ test("Persistent message route maps turn failures to stable sanitized errors", a
     }
   }
 
-  const failingServer = createCompanionServer({
+  const failingServer = createLinkServer({
     conversationService: {
       async sendMessage() { throw new Error("private sqlite path C:\\secret"); },
     },
@@ -1542,7 +1542,7 @@ test("Conversation retrieval rejects unknown query parameters and malformed enco
       return { ok: true, conversation: {}, messages: [] };
     },
   };
-  const server = createCompanionServer({ conversationService });
+  const server = createLinkServer({ conversationService });
   const port = await listen(server);
   const headers = { Authorization: `Bearer ${TEST_BEARER}` };
 

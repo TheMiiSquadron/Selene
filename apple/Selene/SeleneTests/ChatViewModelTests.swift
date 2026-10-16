@@ -7,7 +7,7 @@ import Testing
 struct ChatViewModelTests {
     @Test("Initial state is disconnected")
     func initialState() {
-        let viewModel = makeViewModel(api: StubCompanionAPI())
+        let viewModel = makeViewModel(api: StubSeleneLinkAPI())
 
         #expect(viewModel.assistantDisplayName == "Test Selene")
         #expect(viewModel.connectionState == .notConnected)
@@ -20,7 +20,7 @@ struct ChatViewModelTests {
 
     @Test("Successful connection check marks Companion connected")
     func successfulConnectionCheck() async {
-        let api = StubCompanionAPI()
+        let api = StubSeleneLinkAPI()
         let viewModel = makeViewModel(api: api)
 
         await viewModel.checkConnection()
@@ -34,7 +34,7 @@ struct ChatViewModelTests {
 
     @Test("Failed connection check presents a connection error")
     func failedConnectionCheck() async {
-        let api = StubCompanionAPI(
+        let api = StubSeleneLinkAPI(
             health: { throw URLError(.cannotConnectToHost) }
         )
         let viewModel = makeViewModel(api: api)
@@ -43,12 +43,12 @@ struct ChatViewModelTests {
 
         #expect(viewModel.connectionState == .unavailable)
         #expect(viewModel.pebbleState == .error)
-        #expect(viewModel.issue == .connection("Unable to reach Companion."))
+        #expect(viewModel.issue == .connection("Unable to reach Selene Link."))
     }
 
     @Test("Whitespace-only messages are rejected locally")
     func whitespaceMessage() async {
-        let api = StubCompanionAPI()
+        let api = StubSeleneLinkAPI()
         let viewModel = makeViewModel(api: api)
         viewModel.message = "  \n\t "
 
@@ -63,9 +63,9 @@ struct ChatViewModelTests {
 
     @Test("Successful send displays the reply and clears input")
     func successfulSend() async {
-        let api = StubCompanionAPI(
+        let api = StubSeleneLinkAPI(
             chat: { _ in
-                CompanionChatResponse(
+                LinkChatResponse(
                     ok: true,
                     reply: "Hello from Selene.",
                     state: "idle",
@@ -88,7 +88,7 @@ struct ChatViewModelTests {
 
     @Test("Failed send preserves input")
     func failedSend() async {
-        let api = StubCompanionAPI(
+        let api = StubSeleneLinkAPI(
             chat: { _ in throw URLError(.networkConnectionLost) }
         )
         let viewModel = makeViewModel(api: api)
@@ -99,14 +99,14 @@ struct ChatViewModelTests {
         #expect(viewModel.message == "Please try this")
         #expect(viewModel.latestReply == nil)
         #expect(viewModel.connectionState == .unavailable)
-        #expect(viewModel.issue == .connection("Unable to reach Companion."))
+        #expect(viewModel.issue == .connection("Unable to reach Selene Link."))
     }
 
     @Test("Structured API errors are presented while Companion remains connected")
     func serverError() async {
-        let api = StubCompanionAPI(
+        let api = StubSeleneLinkAPI(
             chat: { _ in
-                throw CompanionAPIError.server(
+                throw SeleneLinkAPIError.server(
                     code: "MODEL_UNAVAILABLE",
                     message: "Selene is unavailable right now.",
                     statusCode: 503
@@ -126,7 +126,7 @@ struct ChatViewModelTests {
 
     @Test("Duplicate sends are ignored while a send is in progress")
     func duplicateSend() async {
-        let api = BlockingCompanionAPI()
+        let api = BlockingSeleneLinkAPI()
         let viewModel = makeViewModel(api: api)
         viewModel.message = "Hello"
 
@@ -149,7 +149,7 @@ struct ChatViewModelTests {
         #expect(viewModel.latestReply == "Only once.")
     }
 
-    private func makeViewModel(api: any CompanionAPIProviding) -> ChatViewModel {
+    private func makeViewModel(api: any SeleneLinkAPIProviding) -> ChatViewModel {
         ChatViewModel(
             configuration: AppConfiguration(
                 assistantDisplayName: "Test Selene",
@@ -160,9 +160,9 @@ struct ChatViewModelTests {
     }
 }
 
-private actor StubCompanionAPI: CompanionAPIProviding {
-    typealias HealthHandler = @Sendable () async throws -> CompanionHealthResponse
-    typealias ChatHandler = @Sendable (String) async throws -> CompanionChatResponse
+private actor StubSeleneLinkAPI: SeleneLinkAPIProviding {
+    typealias HealthHandler = @Sendable () async throws -> LinkHealthResponse
+    typealias ChatHandler = @Sendable (String) async throws -> LinkChatResponse
 
     private let health: HealthHandler
     private let chat: ChatHandler
@@ -171,36 +171,36 @@ private actor StubCompanionAPI: CompanionAPIProviding {
 
     init(
         health: @escaping HealthHandler = {
-            CompanionHealthResponse(ok: true, name: "Selene Core", machine: "Test Host", version: "0")
+            LinkHealthResponse(ok: true, name: "Selene Core", machine: "Test Host", version: "0")
         },
         chat: @escaping ChatHandler = { _ in
-            CompanionChatResponse(ok: true, reply: "Hello.", state: "idle", events: [])
+            LinkChatResponse(ok: true, reply: "Hello.", state: "idle", events: [])
         }
     ) {
         self.health = health
         self.chat = chat
     }
 
-    func fetchHealth() async throws -> CompanionHealthResponse {
+    func fetchHealth() async throws -> LinkHealthResponse {
         healthRequestCount += 1
         return try await health()
     }
 
-    func sendChat(message: String) async throws -> CompanionChatResponse {
+    func sendChat(message: String) async throws -> LinkChatResponse {
         sentMessages.append(message)
         return try await chat(message)
     }
 }
 
-private actor BlockingCompanionAPI: CompanionAPIProviding {
+private actor BlockingSeleneLinkAPI: SeleneLinkAPIProviding {
     private(set) var sendCount = 0
-    private var sendContinuation: CheckedContinuation<CompanionChatResponse, any Error>?
+    private var sendContinuation: CheckedContinuation<LinkChatResponse, any Error>?
 
-    func fetchHealth() async throws -> CompanionHealthResponse {
-        CompanionHealthResponse(ok: true, name: "Selene Core", machine: "Test Host", version: "0")
+    func fetchHealth() async throws -> LinkHealthResponse {
+        LinkHealthResponse(ok: true, name: "Selene Core", machine: "Test Host", version: "0")
     }
 
-    func sendChat(message: String) async throws -> CompanionChatResponse {
+    func sendChat(message: String) async throws -> LinkChatResponse {
         sendCount += 1
 
         return try await withCheckedThrowingContinuation { continuation in
@@ -216,7 +216,7 @@ private actor BlockingCompanionAPI: CompanionAPIProviding {
 
     func completeSend() {
         sendContinuation?.resume(
-            returning: CompanionChatResponse(
+            returning: LinkChatResponse(
                 ok: true,
                 reply: "Only once.",
                 state: "idle",

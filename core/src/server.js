@@ -37,7 +37,7 @@ import {
   NotificationValidationError,
 } from "./notifications.js";
 import { awarenessService } from "./awareness.js";
-import { startCompanionServer } from "./companionServer.js";
+import { startLinkServer } from "./linkServer.js";
 import { createGatewayCredentialStore } from "./gatewayCredentialStore.js";
 import { openProductionGatewayCredentialIssuer } from "./gatewayCredentialRuntime.js";
 import {
@@ -694,7 +694,7 @@ export async function startSeleneServers({
   pairingClaimService = null,
   pairingAdministration = createLocalPairingAdministration(),
 } = {}) {
-  const companionServer = await startCompanionServer({
+  const linkServer = await startLinkServer({
     port: companionPort,
     env,
     onListening: onCompanionListening,
@@ -702,8 +702,8 @@ export async function startSeleneServers({
     credentialStore,
     pairingClaimService,
   });
-  if (!companionServer) {
-    throw new Error("Selene Companion API failed to start.");
+  if (!linkServer) {
+    throw new Error("Selene Link failed to start.");
   }
 
   try {
@@ -712,22 +712,22 @@ export async function startSeleneServers({
       server.once("listening", resolveListening);
       server.once("error", rejectListening);
     });
-    return { server, companionServer, pairingAdministration };
+    return { server, linkServer, pairingAdministration };
   } catch (error) {
-    await new Promise((done) => companionServer.close(done));
+    await new Promise((done) => linkServer.close(done));
     throw error;
   }
 }
 
 export async function closeSeleneServers({
   server,
-  companionServer,
+  linkServer,
   pairingAdministration,
 } = {}) {
   pairingAdministration?.shutdown?.();
   await Promise.all([
-    companionServer
-      ? new Promise((done) => companionServer.close(done))
+    linkServer
+      ? new Promise((done) => linkServer.close(done))
       : Promise.resolve(),
     server
       ? new Promise((done) => server.close(done))

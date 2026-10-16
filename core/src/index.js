@@ -2,29 +2,29 @@ import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { getModelId } from "./lmStudio.js";
 import { runNovaCommand } from "./commandPipeline.js";
-import { startCompanionServer } from "./companionServer.js";
+import { startLinkServer } from "./linkServer.js";
 
 async function main() {
   console.log("Selene Core v0.3.2");
-  const companionServer = await startCompanionServer();
-  let companionClosed = false;
+  const linkServer = await startLinkServer();
+  let linkClosed = false;
 
-  function closeCompanionServer() {
+  function closeLinkServer() {
     return new Promise((resolve) => {
-      if (!companionServer || companionClosed) {
+      if (!linkServer || linkClosed) {
         resolve();
         return;
       }
 
-      companionServer.close(() => {
-        companionClosed = true;
+      linkServer.close(() => {
+        linkClosed = true;
         resolve();
       });
     });
   }
 
   async function shutdown() {
-    await closeCompanionServer();
+    await closeLinkServer();
     process.exit(0);
   }
 
@@ -44,7 +44,7 @@ async function main() {
     model = await getModelId();
   } catch (error) {
     console.error(error.message);
-    await closeCompanionServer();
+    await closeLinkServer();
     return;
   }
 
@@ -80,7 +80,7 @@ async function main() {
     }
   } finally {
     rl.close();
-    await closeCompanionServer();
+    await closeLinkServer();
   }
 }
 

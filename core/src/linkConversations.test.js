@@ -1,18 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  COMPANION_CONVERSATION_LIST_DEFAULT_LIMIT,
-  COMPANION_CONVERSATION_LIST_MAX_LIMIT,
-  COMPANION_CONVERSATION_MESSAGE_MAX_LIMIT,
-  CompanionConversationValidationError,
-  createCompanionConversationService,
-} from "./companionConversations.js";
+  LINK_CONVERSATION_LIST_DEFAULT_LIMIT,
+  LINK_CONVERSATION_LIST_MAX_LIMIT,
+  LINK_CONVERSATION_MESSAGE_MAX_LIMIT,
+  LinkConversationValidationError,
+  createLinkConversationService,
+} from "./linkConversations.js";
 
 const ID = "00000000-0000-4000-8000-000000000001";
 const OWNER_ID = "00000000-0000-4000-8000-0000000000aa";
 
 test("conversation service exposes its operations", () => {
-  const service = createCompanionConversationService({ conversationStore: {} });
+  const service = createLinkConversationService({ conversationStore: {} });
   assert.equal(typeof service.createConversation, "function");
   assert.equal(typeof service.listConversations, "function");
   assert.equal(typeof service.getConversation, "function");
@@ -20,7 +20,7 @@ test("conversation service exposes its operations", () => {
 
 test("conversation creation accepts only an empty client object", () => {
   const calls = [];
-  const service = createCompanionConversationService({
+  const service = createLinkConversationService({
     conversationStore: {
       createConversation(...args) {
         calls.push(args);
@@ -33,7 +33,7 @@ test("conversation creation accepts only an empty client object", () => {
   assert.deepEqual(calls, [[OWNER_ID]]);
   assert.throws(
     () => service.createConversation(OWNER_ID, { title: "client title" }),
-    (error) => error instanceof CompanionConversationValidationError
+    (error) => error instanceof LinkConversationValidationError
       && error.code === "INVALID_REQUEST",
   );
 });
@@ -44,7 +44,7 @@ test("conversation lists use bounded keyset pagination and opaque cursors", () =
     id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
     updatedAt: new Date(Date.UTC(2026, 9, 5, 20, 0, 20 - index)).toISOString(),
   }));
-  const service = createCompanionConversationService({
+  const service = createLinkConversationService({
     conversationStore: {
       listConversations(ownerId, options) {
         calls.push([ownerId, options]);
@@ -54,8 +54,8 @@ test("conversation lists use bounded keyset pagination and opaque cursors", () =
   });
 
   const first = service.listConversations(OWNER_ID, );
-  assert.equal(COMPANION_CONVERSATION_LIST_DEFAULT_LIMIT, 20);
-  assert.equal(COMPANION_CONVERSATION_LIST_MAX_LIMIT, 100);
+  assert.equal(LINK_CONVERSATION_LIST_DEFAULT_LIMIT, 20);
+  assert.equal(LINK_CONVERSATION_LIST_MAX_LIMIT, 100);
   assert.equal(first.conversations.length, 20);
   assert.equal(first.hasMore, true);
   assert.equal(typeof first.nextCursor, "string");
@@ -85,7 +85,7 @@ test("conversation retrieval returns complete bounded history and rejects overfl
   const messages = Array.from({ length: 200 }, (_, index) => ({
     sequence: index + 1,
   }));
-  const service = createCompanionConversationService({
+  const service = createLinkConversationService({
     conversationStore: {
       getConversation() { return { id: ID, title: null }; },
       getMessages(ownerId, id, options) {
@@ -96,7 +96,7 @@ test("conversation retrieval returns complete bounded history and rejects overfl
   });
 
   const result = service.getConversation(OWNER_ID, ID);
-  assert.equal(COMPANION_CONVERSATION_MESSAGE_MAX_LIMIT, 200);
+  assert.equal(LINK_CONVERSATION_MESSAGE_MAX_LIMIT, 200);
   assert.equal(result.messages.length, 200);
   assert.equal(result.messages[0].sequence, 1);
   assert.equal(result.messages.at(-1).sequence, 200);
@@ -106,7 +106,7 @@ test("conversation retrieval returns complete bounded history and rejects overfl
     (error) => error.code === "INVALID_REQUEST",
   );
 
-  const overflow = createCompanionConversationService({
+  const overflow = createLinkConversationService({
     conversationStore: {
       getConversation() { return { id: ID, title: null }; },
       getMessages() {
@@ -128,7 +128,7 @@ test("persistent turn supplies chronological history and commits the authoritati
   ];
   const modelCalls = [];
   const commitCalls = [];
-  const service = createCompanionConversationService({
+  const service = createLinkConversationService({
     conversationStore: {
       getConversation() { return { id: ID, title: null }; },
       getMessages() { return history; },
@@ -173,7 +173,7 @@ test("cross-owner turns fail before model execution or persistence", async () =>
   const ownerB = "00000000-0000-4000-8000-0000000000bb";
   let modelCalls = 0;
   let commits = 0;
-  const service = createCompanionConversationService({
+  const service = createLinkConversationService({
     conversationStore: {
       getConversation(ownerId, id) {
         assert.equal(id, ID);
@@ -205,7 +205,7 @@ test("cross-owner turns fail before model execution or persistence", async () =>
 
 test("model failure leaves persistent conversation history unchanged", async () => {
   let commits = 0;
-  const service = createCompanionConversationService({
+  const service = createLinkConversationService({
     conversationStore: {
       getConversation() { return { id: ID }; },
       getMessages() { return []; },
@@ -228,7 +228,7 @@ test("persistent turns reject a new pair when it would exceed the 200-message ce
   for (const historyLength of [199, 200, 201]) {
     let modelCalls = 0;
     let commits = 0;
-    const service = createCompanionConversationService({
+    const service = createLinkConversationService({
       conversationStore: {
         getConversation() { return { id: ID }; },
         getMessages() {
@@ -261,7 +261,7 @@ test("persistent turns allow the final pair that reaches exactly 200 messages", 
     content: `message ${index + 1}`,
   }));
   let commits = 0;
-  const service = createCompanionConversationService({
+  const service = createLinkConversationService({
     conversationStore: {
       getConversation() { return { id: ID }; },
       getMessages() { return history; },
@@ -292,7 +292,7 @@ test("turns serialize per conversation so the next turn sees the prior commit", 
   let releaseFirst;
   const firstGeneration = new Promise((resolve) => { releaseFirst = resolve; });
   let modelCall = 0;
-  const service = createCompanionConversationService({
+  const service = createLinkConversationService({
     conversationStore: {
       getConversation() { return { id: ID }; },
       getMessages() { return [...stored]; },

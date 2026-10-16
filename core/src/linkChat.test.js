@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  COMPANION_CHAT_EMPTY_REPLY,
-  COMPANION_CHAT_MAX_MESSAGE_CHARS,
-  COMPANION_CHAT_SYSTEM_PROMPT,
-  CompanionChatValidationError,
-  handleCompanionChat,
-} from "./companionChat.js";
+  LINK_CHAT_EMPTY_REPLY,
+  LINK_CHAT_MAX_MESSAGE_CHARS,
+  LINK_CHAT_SYSTEM_PROMPT,
+  LinkChatValidationError,
+  handleLinkChat,
+} from "./linkChat.js";
 
 function createStubModelService(response) {
   const calls = [];
@@ -32,7 +32,7 @@ test("Companion chat uses the primary model as a tool-free conversational bounda
     }],
   });
 
-  const result = await handleCompanionChat({
+  const result = await handleLinkChat({
     message: "  Hello, Selene.  ",
     modelService: service,
   });
@@ -42,7 +42,7 @@ test("Companion chat uses the primary model as a tool-free conversational bounda
   assert.equal(calls[0].toolChoice, "none");
   assert.equal(Object.hasOwn(calls[0], "tools"), false);
   assert.deepEqual(calls[0].messages, [
-    { role: "system", content: COMPANION_CHAT_SYSTEM_PROMPT },
+    { role: "system", content: LINK_CHAT_SYSTEM_PROMPT },
     { role: "user", content: "Hello, Selene." },
   ]);
   assert.deepEqual(result, {
@@ -54,10 +54,10 @@ test("Companion chat uses the primary model as a tool-free conversational bounda
 });
 
 test("Companion chat prompt explicitly describes its non-privileged limits", () => {
-  assert.match(COMPANION_CHAT_SYSTEM_PROMPT, /non-privileged/i);
-  assert.match(COMPANION_CHAT_SYSTEM_PROMPT, /cannot run commands/i);
-  assert.match(COMPANION_CHAT_SYSTEM_PROMPT, /cannot.*use tools/i);
-  assert.match(COMPANION_CHAT_SYSTEM_PROMPT, /Never claim.*performed an action/i);
+  assert.match(LINK_CHAT_SYSTEM_PROMPT, /non-privileged/i);
+  assert.match(LINK_CHAT_SYSTEM_PROMPT, /cannot run commands/i);
+  assert.match(LINK_CHAT_SYSTEM_PROMPT, /cannot.*use tools/i);
+  assert.match(LINK_CHAT_SYSTEM_PROMPT, /Never claim.*performed an action/i);
 });
 
 test("Companion chat safely handles missing or unexpected model response shapes", async (t) => {
@@ -76,14 +76,14 @@ test("Companion chat safely handles missing or unexpected model response shapes"
   for (const response of responses) {
     await t.test(JSON.stringify(response) ?? "undefined", async () => {
       const { service } = createStubModelService(response);
-      const result = await handleCompanionChat({
+      const result = await handleLinkChat({
         message: "Hello",
         modelService: service,
       });
 
       assert.deepEqual(result, {
         ok: true,
-        reply: COMPANION_CHAT_EMPTY_REPLY,
+        reply: LINK_CHAT_EMPTY_REPLY,
         state: "idle",
         events: [],
       });
@@ -106,24 +106,24 @@ test("Companion chat ignores model tool calls and never invokes them", async () 
     choices: [{ message: { content: "", tool_calls: [toolCall] } }],
   });
 
-  const result = await handleCompanionChat({
+  const result = await handleLinkChat({
     message: "Run a command",
     modelService: service,
   });
 
   assert.equal(invoked, false);
-  assert.equal(result.reply, COMPANION_CHAT_EMPTY_REPLY);
+  assert.equal(result.reply, LINK_CHAT_EMPTY_REPLY);
   assert.deepEqual(result.events, []);
 });
 
 test("Companion chat rejects invalid messages before calling the model", async () => {
   const { calls, service } = createStubModelService({});
-  const invalidMessages = [undefined, 123, "   ", "x".repeat(COMPANION_CHAT_MAX_MESSAGE_CHARS + 1)];
+  const invalidMessages = [undefined, 123, "   ", "x".repeat(LINK_CHAT_MAX_MESSAGE_CHARS + 1)];
 
   for (const message of invalidMessages) {
     await assert.rejects(
-      () => handleCompanionChat({ message, modelService: service }),
-      CompanionChatValidationError,
+      () => handleLinkChat({ message, modelService: service }),
+      LinkChatValidationError,
     );
   }
 
@@ -139,7 +139,7 @@ test("Companion chat propagates model failures for the server to sanitize", asyn
   };
 
   await assert.rejects(
-    () => handleCompanionChat({ message: "Hello", modelService }),
+    () => handleLinkChat({ message: "Hello", modelService }),
     (error) => error === failure,
   );
 });

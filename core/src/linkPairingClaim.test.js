@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import https from "node:https";
 import http from "node:http";
 import { createPublicKey, generateKeyPairSync, randomBytes, sign } from "node:crypto";
-import { createCompanionServer } from "./companionServer.js";
+import { createLinkServer } from "./linkServer.js";
 
 const TEST_BEARER =
   "selene_gateway_v1.00000000-0000-4000-8000-000000000000.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -66,7 +66,7 @@ async function fixture(t, options = {}) {
           return { paired: true, credential: TEST_BEARER };
         },
       };
-  const server = createCompanionServer({
+  const server = createLinkServer({
     tlsOptions,
     pairingClaimService,
     credentialStore: options.credentialStore ?? {
@@ -127,7 +127,7 @@ function request(f, {
 
 test("pairing claim route requires HTTPS and never falls back to plaintext", async (t) => {
   let claimCalls = 0;
-  const server = createCompanionServer({
+  const server = createLinkServer({
     pairingClaimService: {
       claim() {
         claimCalls += 1;
