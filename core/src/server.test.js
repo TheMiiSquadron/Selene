@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
+import net from "node:net";
+import { EventEmitter } from "node:events";
 import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -8,6 +10,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { createCoreServer, startCoreServer, startSeleneServers } from "./server.js";
+import { resolveLinkHost } from "./linkServer.js";
 
 const require = createRequire(import.meta.url);
 const { createCoreAdminChannel } = require("../../pebble/src/coreAdminChannel.cjs");
@@ -29,6 +32,88 @@ function close(server) {
     server.close(() => resolve());
   });
 }
+
+// Probe by binding and immediately releasing our own sockets; never contact or
+// close an existing listener. Only a confirmed address conflict permits a skip.
+async function occupiedStartupPorts(endpoints, createServer = () => net.createServer()) {
+  const occupied = [];
+  for (const endpoint of endpoints) {
+    const busy = await new Promise((resolve, reject) => {
+      const server = createServer();
+      server.once("error", (error) => {
+        if (error.code === "EADDRINUSE") resolve(true);
+        else reject(error);
+      });
+      server.listen({ ...endpoint, exclusive: true }, () => {
+        server.close((error) => error ? reject(error) : resolve(false));
+      });
+    });
+    if (busy) occupied.push(endpoint);
+  }
+  return occupied;
+}
+
+function mockPortProbe(outcomes) {
+  const attempts = [];
+  const released = [];
+  return {
+    attempts,
+    released,
+    createServer() {
+      const server = new EventEmitter();
+      server.listen = (options, onListening) => {
+        attempts.push(options);
+        const outcome = outcomes[attempts.length - 1];
+        queueMicrotask(() => outcome ? server.emit("error", outcome) : onListening());
+      };
+      server.close = (callback) => {
+        released.push(attempts.length - 1);
+        callback();
+      };
+      return server;
+    },
+  };
+}
+
+test("owned Core port preflight releases available ports", async () => {
+  const endpoints = [{ host: "127.0.0.1", port: 3030 }, { host: "127.0.0.1", port: 8787 }];
+  const probe = mockPortProbe([null, null]);
+  assert.deepEqual(await occupiedStartupPorts(endpoints, probe.createServer), []);
+  assert.deepEqual(probe.attempts, endpoints.map((endpoint) => ({ ...endpoint, exclusive: true })));
+  assert.deepEqual(probe.released, [0, 1]);
+});
+
+test("owned Core port preflight identifies either or both occupied ports", async () => {
+  const endpoints = [{ host: "127.0.0.1", port: 3030 }, { host: "127.0.0.1", port: 8787 }];
+  const busy = Object.assign(new Error("Address in use"), { code: "EADDRINUSE" });
+  for (const outcomes of [[busy, null], [null, busy], [busy, busy]]) {
+    const probe = mockPortProbe(outcomes);
+    assert.deepEqual(await occupiedStartupPorts(endpoints, probe.createServer),
+      endpoints.filter((_endpoint, index) => outcomes[index]));
+    assert.deepEqual(probe.released,
+      outcomes.flatMap((outcome, index) => outcome ? [] : [index]));
+  }
+});
+
+test("owned Core port preflight propagates unexpected errors", async () => {
+  const error = Object.assign(new Error("Access denied"), { code: "EACCES" });
+  const probe = mockPortProbe([error]);
+  await assert.rejects(occupiedStartupPorts([{ host: "127.0.0.1", port: 3030 }], probe.createServer),
+    (actual) => actual === error);
+});
+
+test("owned Core port preflight leaves an existing listener running", async () => {
+  const server = net.createServer();
+  const port = await listen(server);
+  try {
+    const endpoints = [{ host: "127.0.0.1", port }];
+    assert.deepEqual(await occupiedStartupPorts(endpoints), endpoints);
+    assert.equal(server.listening, true);
+    assert.equal(server.address().port, port);
+  } finally {
+    await close(server);
+  }
+});
 
 test("Core server remains loopback-only when Companion LAN mode is enabled", async () => {
   const previous = process.env.SELENE_COMPANION_LAN;
@@ -135,7 +220,17 @@ test("Selene Link bind failure does not open the Core listener", async () => {
   }
 });
 
-test("owned Core admin channel starts before production credential issuer validation", async () => {
+test("owned Core admin channel starts before production credential issuer validation", async (t) => {
+  const occupied = await occupiedStartupPorts([
+    { host: "127.0.0.1", port: 3030 },
+    { host: resolveLinkHost(process.env), port: 8787 },
+  ]);
+  if (occupied.length) {
+    t.skip(`Required startup ports already in use: ${occupied.map(({ host, port }) => `${host}:${port}`).join(", ")}. Owned Core startup/handshake assertions were not run; existing listeners were left untouched.`);
+    return;
+  }
+  // A later startup or authentication failure still fails normally; this probe
+  // cannot reserve the ports across the child-process startup race.
   const localAppData = await mkdtemp(join(tmpdir(), "selene-owned-core-startup-"));
   const child = spawn(
     process.execPath,
