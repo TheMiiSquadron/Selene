@@ -21,9 +21,10 @@
     </header>
 
     <div class="app-body" data-sidebar-collapsed="false">
+      <nav class="destination-rail" aria-label="Destinations"><button type="button" class="rail-button is-current" data-destination="home" aria-label="Home" title="Home"><img src="../../../../assets/icons/01-navigation/home.svg" alt=""></button><button type="button" class="rail-button" data-destination="projects" aria-label="Projects" title="Projects"><img src="../../../../assets/icons/01-navigation/projects.svg" alt=""></button><button type="button" class="rail-button" data-destination="library" aria-label="Library" title="Library"><img src="../../../../assets/icons/01-navigation/history.svg" alt=""></button><button type="button" class="rail-button" data-destination="devices" aria-label="Devices" title="Devices"><img src="../../../../assets/icons/01-navigation/devices.svg" alt=""></button><div class="rail-spacer"></div><button type="button" class="rail-button" data-destination="settings" aria-label="Settings" title="Settings"><img src="../../../../assets/icons/01-navigation/settings.svg" alt=""></button></nav>
       <aside class="sidebar" data-collapsed="false" aria-label="Application sidebar">
         <div class="sidebar-header">
-          <span class="sidebar-heading">Workspace</span>
+          <span class="sidebar-heading" id="context-heading">Home</span>
           <button
             class="icon-button sidebar-toggle"
             id="sidebar-toggle"
@@ -50,11 +51,11 @@
             <img class="ui-icon library-icon" src="../../../../assets/icons/01-navigation/search.svg" alt="" aria-hidden="true">
             <span class="nav-label">Search Conversations</span>
           </button>
-          <button class="nav-item" type="button" data-placeholder="projects" title="Projects — integration unavailable">
+          <button class="nav-item" type="button" data-action="projects" title="Projects">
             <img class="ui-icon library-icon" src="../../../../assets/icons/01-navigation/projects.svg" alt="" aria-hidden="true">
             <span class="nav-label">Projects</span>
           </button>
-          <button class="nav-item" type="button" data-placeholder="devices" title="Devices — integration unavailable">
+          <button class="nav-item" type="button" data-action="devices" title="Devices">
             <img class="ui-icon library-icon" src="../../../../assets/icons/01-navigation/devices.svg" alt="" aria-hidden="true">
             <span class="nav-label">Devices</span>
           </button>
@@ -168,7 +169,7 @@
 
           <p class="composer-status" id="composer-status" role="status" aria-live="polite"></p>
 
-          <div class="quick-actions" aria-label="Quick actions">
+          <div class="quick-actions" aria-label="Quick actions"><button type="button" class="quick-action" id="preview-conversation"><span>Preview conversation layout</span></button>
             <button type="button" class="quick-action" data-placeholder="continue">
               <img class="ui-icon library-icon" src="../../../../assets/icons/01-navigation/history.svg" alt="" aria-hidden="true">
               <span>Continue a conversation</span>
@@ -183,6 +184,10 @@
             </button>
           </div>
         </section>
+
+        <section class="conversation-view app-view" id="conversation-view" aria-label="Conversation preview" hidden><header class="conversation-header"><div><p class="conversation-eyebrow">Interface preview</p><h1>Conversation workspace</h1></div><button type="button" class="conversation-close" id="close-conversation">New chat</button></header><div class="conversation-scroll"><div class="conversation-content"><div class="message message-user"><div class="message-label">You · Example</div><div class="message-bubble">Can we plan the next steps for Selene Homes?</div></div><div class="message message-selene"><div class="message-label">Selene · Example</div><div class="message-bubble"><p>Absolutely. We can start with a calm, conversation-first workspace, then connect the interface to Selene Core.</p><p>For now, this is a visual preview. No message has been sent to Core.</p></div></div></div></div><div class="conversation-composer-wrap"><p class="conversation-disclaimer">Preview only · Core conversation integration is not connected</p><button type="button" class="conversation-preview-input" id="return-to-home">Return to Home to compose a message <span aria-hidden="true">↗</span></button></div></section>
+
+        <section class="destination-view app-view" id="destination-view" hidden><header class="destination-header"><p class="conversation-eyebrow">Selene Homes</p><h1 id="destination-title">Projects</h1><p id="destination-description">Integration coming in a future milestone.</p></header></section>
 
         <section class="settings-view app-view" id="settings-view" aria-labelledby="settings-title" hidden>
           <header class="settings-header">
