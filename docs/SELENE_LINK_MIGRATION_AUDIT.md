@@ -1,7 +1,7 @@
 # Selene Link Migration Audit
 
 **Branch:** `cleanup/selene-gateway`  
-**Status:** Static inspection in progress; **not approved for merge**  
+**Status:** Final static review and Core check passed; production and Apple device validation pending
 **Scope:** Retirement of the Web Companion frontend and renaming the retained API backend to Selene Link.
 
 ## Verified from GitHub repository inspection
@@ -35,12 +35,19 @@ Do **not** rename or migrate the following as part of a cosmetic naming cleanup:
 
 The current development iOS configuration includes a fixed local network address. Verify the correct NOVA address, protocol, certificate trust, and authorization before testing from an iPhone. Do not assume LAN mode is secure or production-ready merely because it starts.
 
-## Remaining work (not verified)
+## Final dependency and compatibility review — October 15, 2026
 
-- **Repository-wide static dependency scan:** Review all remaining JS/Swift references, imports, exports, scripts, and documentation. The inspections above are targeted, not an exhaustive import graph.
-- **Security review:** Exercise authentication, pairing, revocation, permissions, TLS, CORS, LAN exposure, and error sanitization. Inspection alone does not prove these protections work.
-- **NOVA:** In `core/`, run `npm run check` (which also invokes `npm test`), then verify Core loopback port `3030` and Link port `8787` and test the configured transport.
-- **ORION:** Open the Xcode project, build the iOS target, and run the Swift test suite; then test the connection from the physical iPhone.
-- **Final diff review:** Inspect the cleanup branch against `main`, resolve all failures, and merge only after approval.
+- Reviewed the cleanup branch against local `main`. Relative JavaScript import/require targets under Core, Pebble, and Homes resolve; no references to the deleted Core Companion modules or old Swift API types remain.
+- The renamed Core service implementations retain their request routing, payloads, status codes, authentication, capabilities, and limits. Differences beyond identifier renaming are service wording and diagnostics. The chat system prompt retains its non-privileged boundary with updated service terminology.
+- Credential storage/runtime, schemas, token formats, pairing implementation, conversation storage, M4.6 script, and iOS connection configuration are unchanged from `main`. Existing `SELENE_COMPANION_*` variables and Core startup option names remain intact.
+- The Swift client retains its transport and request/response behavior. Xcode uses synchronized source groups; no explicit reference to the deleted Swift filename remains. Apple builds and tests require ORION and were not run on NOVA.
+- Corrected iPhone/Apple Watch roles in `Selene.md`, stale iPhone settings labels, and the README's outdated unauthenticated-access description. These corrections do not change API behavior.
+- The first Core check encountered an inherited PowerShell module-path conflict: Windows PowerShell could not import its security module. The rerun uses the Machine module path in a temporary Windows PowerShell child process; no persistent environment settings or security policies were changed.
+- `npm run check` from `core/` passed on October 15, 2026: JavaScript syntax checks, Python compilation, and all 392 automated tests passed, with zero failures or skips. The user authorized a normal local merge into `main` after successful checks.
 
-**Important:** No Node, Swift, Xcode, or device tests have been executed as part of this audit. Do not interpret inspected test files as passing tests.
+## Remaining production/device validation
+
+- Validate production HTTPS, certificate trust, pairing, credentials, and persistence against NOVA's running services separately. M4.6 was not executed during this review.
+- On ORION, build the Apple targets, run the Swift tests, and validate the physical iPhone connection. Existing development transport and authentication limitations are not resolved by this naming cleanup.
+
+Static compatibility review and automated tests do not establish production or device readiness.

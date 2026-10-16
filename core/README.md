@@ -84,10 +84,18 @@ must trust the issuing CA and use a hostname or IP address present in the
 certificate's subject alternative names. The privileged Core server remains
 loopback-only at `127.0.0.1:3030`.
 
-Selene Link access is still unauthenticated. Legacy plaintext HTTP LAN mode
-remains temporarily available for compatibility, but Selene Link bearer credentials
-must **never** be transmitted over plaintext HTTP. Do not configure clients to
-disable certificate validation. Scope any external Windows Firewall rule to
+Selene Link chat and conversation routes require HTTPS and a valid bearer
+credential with the appropriate capabilities. Conversation reads require
+`conversation:read`; creation requires `conversation:write`; persistent message
+submission requires both `conversation:write` and `chat`. The existing `/api/chat`
+route requires `chat`, while `/health` remains anonymous. Pairing claims require
+HTTPS and a valid active pairing secret through `/api/pairing/claim`.
+
+Legacy plaintext HTTP LAN mode remains temporarily available for compatibility,
+but protected chat and conversation operations reject plaintext requests.
+Selene Link bearer credentials must **never** be transmitted over plaintext HTTP.
+Do not configure clients to disable certificate validation.
+Scope any external Windows Firewall rule to
 TCP port `8787` on the Private profile and trusted local devices. Do not expose
 ports `3030` or `1234`, and do not configure router port forwarding.
 

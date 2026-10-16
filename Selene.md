@@ -70,8 +70,8 @@ The Constellation is Selene's connected device ecosystem.
 | NOVA                            | Host                   |
 | ORION                           | Node                   |
 | ENVY                            | Node                   |
-| iPhone                          | Companion              |
-| Apple Watch                     | Companion              |
+| iPhone                          | iOS Home               |
+| Apple Watch                     | watchOS Home           |
 | Friends' and family's computers | Future nodes           |
 
 NOVA is the initial canonical host for shared conversation history.
