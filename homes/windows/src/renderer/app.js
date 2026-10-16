@@ -14,6 +14,8 @@ const conversationView = document.querySelector('#conversation-view');
 const destinationView = document.querySelector('#destination-view');
 const destinationButtons = Array.from(document.querySelectorAll('[data-destination]'));
 const contextHeading = document.querySelector('#context-heading');
+const composerHomeParent = document.querySelector('#home-view');
+const conversationComposerWrap = document.querySelector('.conversation-composer-wrap');
 const homeButton = document.querySelector('[data-action="home"]');
 const newChatButton = document.querySelector('[data-action="new-chat"]');
 const settingsButton = document.querySelector('[data-action="settings"]');
@@ -77,6 +79,9 @@ function setCurrentNavigation(control) {
 }
 
 function showView(view, activeNavigation = homeButton) {
+  if (composer.parentElement !== composerHomeParent) {
+    composerHomeParent.insertBefore(composer, document.querySelector('#composer-status'));
+  }
   const showSettings = view === 'settings';
   homeView.hidden = showSettings;
   settingsView.hidden = !showSettings;
@@ -115,6 +120,9 @@ function openDestination(destination) {
     showView(destination);
     return;
   }
+  if (composer.parentElement !== composerHomeParent) {
+    composerHomeParent.insertBefore(composer, document.querySelector('#composer-status'));
+  }
   homeView.hidden = true;
   settingsView.hidden = true;
   conversationView.hidden = true;
@@ -138,6 +146,7 @@ document.querySelector('#preview-conversation').addEventListener('click', () => 
   settingsView.hidden = true;
   destinationView.hidden = true;
   conversationView.hidden = false;
+  conversationComposerWrap.appendChild(composer);
   contextHeading.textContent = 'Home';
   destinationButtons.forEach((button) => button.classList.toggle('is-current', button.dataset.destination === 'home'));
 });
